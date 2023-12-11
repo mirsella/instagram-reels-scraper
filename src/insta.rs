@@ -4,7 +4,9 @@ use anyhow::Result;
 use core::fmt;
 use headless_chrome::{Browser, LaunchOptionsBuilder, Tab};
 use log::{debug, error, trace};
+use serde_json::Value;
 use std::{
+    ffi::OsStr,
     sync::{
         mpsc::{self, Receiver},
         Arc, Mutex,
@@ -22,6 +24,19 @@ pub struct Reel {
     pub like: usize,
     pub comments: usize,
     pub views: usize,
+}
+impl From<&Value> for Reel {
+    fn from(value: &Value) -> Self {
+        let reel = &value["media"];
+        let caption = reel
+            .get("caption")
+            .map(|v: &Value| v["text"].clone())
+            .unwrap_or_default();
+        Self {
+            caption: caption.as_str().unwrap_or("no caption").into(),
+            ..Default::default()
+        }
+    }
 }
 impl fmt::Display for Reel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -60,6 +75,7 @@ fn setup(config: &Config) -> Result<Browser> {
     let browser = Browser::new(
         LaunchOptionsBuilder::default()
             .user_data_dir(Some(config.chromedata.clone()))
+            .args(vec![OsStr::new("--blink-settings=imagesEnabled=false")])
             .headless(config.headless)
             .build()?,
     )?;
