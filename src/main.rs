@@ -4,8 +4,8 @@ mod insta;
 use anyhow::{Context, Result};
 use config::Config;
 use env_logger::Builder;
-use insta::setup;
-use std::{env, thread};
+use insta::run;
+use std::env;
 
 fn main() -> Result<()> {
     Builder::new()
@@ -13,7 +13,14 @@ fn main() -> Result<()> {
         .init();
     dotenvy::dotenv().context("loading .env")?;
     let config: Config = envy::from_env().context("failed to parse environment variables")?;
-    setup(&config).context("setting up insta")?;
-    thread::park();
+    let mut reels = Vec::with_capacity(100);
+    let rx = run(&config).context("setting up insta")?;
+    while let Ok(reel) = rx.recv() {
+        reels.push(reel);
+    }
+    for reel in reels.iter() {
+        println!("{}", reel);
+    }
+    println!("total: {}", reels.len());
     Ok(())
 }

@@ -12,7 +12,8 @@ fn _default_headless() -> bool {
     true
 }
 
-pub const USER_AGENT: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1";
+// pub const USER_AGENT: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1";
+pub const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
