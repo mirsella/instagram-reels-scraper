@@ -1,9 +1,11 @@
 use super::Reel;
 use headless_chrome::Tab;
-use log::info;
-use serde_json::Value;
+use log::{debug, trace};
 use std::{
-    sync::{mpsc::Sender, Arc, Mutex},
+    sync::{
+        mpsc::{self, Sender},
+        Arc, Mutex,
+    },
     thread,
     time::Duration,
 };
@@ -13,6 +15,7 @@ pub fn scraper(
     accounts: Arc<Mutex<Vec<String>>>,
     tx: Sender<Reel>,
 ) -> anyhow::Result<()> {
+    let (unlocker, locker) = mpsc::channel();
     tab.register_response_handling(
         "reels",
         Box::new(move |res, fetch_body| {
@@ -23,6 +26,7 @@ pub fn scraper(
             {
                 return;
             }
+            trace!("got /clips/user/ response");
             let body = fetch_body()
                 .unwrap_or_else(|_| {
                     thread::sleep(Duration::from_millis(1000));
@@ -30,15 +34,18 @@ pub fn scraper(
                 })
                 .body;
             let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+            trace!("sending reels to main thread");
             for reel in body["items"].as_array().unwrap() {
                 tx.send(reel.into()).unwrap();
             }
+            unlocker.send(()).unwrap();
         }),
     )?;
-    // while let Some(account) = accounts.lock()?.pop() {
-    // }
-    tab.navigate_to("https://www.instagram.com/le.media.positif/reels/")?
-        .wait_until_navigated()?;
-    thread::sleep(Duration::from_secs(10));
+    while let Some(account) = accounts.lock().unwrap().pop() {
+        debug!("scraping reels of {}", account);
+        tab.navigate_to(&format!("https://www.instagram.com/{account}/reels/"))?
+            .wait_until_navigated()?;
+        locker.recv().unwrap();
+    }
     Ok(())
 }

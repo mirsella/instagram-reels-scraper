@@ -2,8 +2,9 @@ mod scraper;
 use crate::config::{Config, USER_AGENT};
 use anyhow::Result;
 use core::fmt;
-use headless_chrome::{Browser, LaunchOptionsBuilder, Tab};
+use headless_chrome::{Browser, LaunchOptionsBuilder};
 use log::{debug, error, trace};
+use scraper::scraper;
 use serde_json::Value;
 use std::{
     ffi::OsStr,
@@ -15,8 +16,6 @@ use std::{
     time::Duration,
 };
 
-use self::scraper::scraper;
-
 #[derive(Debug, Default)]
 pub struct Reel {
     pub id: String,
@@ -24,6 +23,7 @@ pub struct Reel {
     pub like: usize,
     pub comments: usize,
     pub views: usize,
+    pub duration: usize,
 }
 impl From<&Value> for Reel {
     fn from(value: &Value) -> Self {
@@ -32,9 +32,18 @@ impl From<&Value> for Reel {
             .get("caption")
             .map(|v: &Value| v["text"].clone())
             .unwrap_or_default();
+        let id = reel["code"].as_str().unwrap_or_default().into();
+        let views = reel["play_count"].as_u64().unwrap_or_default() as usize;
+        let like = reel["like_count"].as_u64().unwrap_or_default() as usize;
+        let comments = reel["comment_count"].as_u64().unwrap_or_default() as usize;
+        let duration = reel["video_duration"].as_u64().unwrap_or_default() as usize;
         Self {
             caption: caption.as_str().unwrap_or("no caption").into(),
-            ..Default::default()
+            id,
+            views,
+            like,
+            comments,
+            duration,
         }
     }
 }
@@ -42,43 +51,14 @@ impl fmt::Display for Reel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Reel {}, caption: {:.40}, {} likes, {} comments, {} views",
-            self.id, self.caption, self.like, self.comments, self.views
+            "Reel {}:{:.40}, {} likes, {} comments, {} views, {}",
+            self.id, self.caption, self.like, self.comments, self.views, self.duration
         )
     }
 }
 
-fn login(tab: &Tab, user: &str, pass: &str) -> Result<()> {
-    debug!("logging in");
-    tab.find_element("input[name=username]")?.type_into(user)?;
-    tab.find_element("input[name=password]")?.type_into(pass)?;
-    tab.find_element("button[type=submit]")?.click()?;
-    trace!("wait for redirect");
-    while tab
-        .get_url()
-        .starts_with("https://www.instagram.com/accounts/login")
-    {
-        sleep(Duration::from_millis(100));
-    }
-    tab.wait_until_navigated()?;
-    trace!("finish waiting for redirect");
-    if let Ok(el) = tab.find_element("button[type=button]") {
-        trace!("save info");
-        el.click()?;
-    }
-    tab.wait_until_navigated()?;
-    Ok(())
-}
-
-fn setup(config: &Config) -> Result<Browser> {
-    trace!("launching browser");
-    let browser = Browser::new(
-        LaunchOptionsBuilder::default()
-            .user_data_dir(Some(config.chromedata.clone()))
-            .args(vec![OsStr::new("--blink-settings=imagesEnabled=false")])
-            .headless(config.headless)
-            .build()?,
-    )?;
+fn login(config: &Config) -> Result<()> {
+    let browser = new_browser(config)?;
     let tab = browser.new_tab()?;
     tab.set_user_agent(USER_AGENT, None, None)?;
     tab.navigate_to("https://www.instagram.com/accounts/login/")?
@@ -92,21 +72,51 @@ fn setup(config: &Config) -> Result<Browser> {
         sleep(Duration::from_secs(2));
     }
     if tab.find_element("input[name=username]").is_ok() {
-        login(&tab, &config.insta_user, &config.insta_pass)?;
+        debug!("logging in");
+        tab.find_element("input[name=username]")?
+            .type_into(&config.insta_user)?;
+        tab.find_element("input[name=password]")?
+            .type_into(&config.insta_pass)?;
+        tab.find_element("button[type=submit]")?.click()?;
+        trace!("wait for redirect");
+        while tab
+            .get_url()
+            .starts_with("https://www.instagram.com/accounts/login")
+        {
+            sleep(Duration::from_millis(100));
+        }
+        tab.wait_until_navigated()?;
+        trace!("finish waiting for redirect");
+        if let Ok(el) = tab.find_element("button[type=button]") {
+            trace!("save info");
+            el.click()?;
+        }
+        tab.wait_until_navigated()?;
     }
-    Ok(browser)
+    Ok(())
+}
+
+fn new_browser(config: &Config) -> Result<Browser> {
+    trace!("launching browser");
+    Browser::new(
+        LaunchOptionsBuilder::default()
+            .user_data_dir(Some(config.chromedata.clone()))
+            .args(vec![OsStr::new("--blink-settings=imagesEnabled=false")])
+            .headless(config.headless)
+            .build()?,
+    )
 }
 
 pub fn run(config: &Config) -> Result<Receiver<Reel>> {
-    let browser = setup(config)?;
-    debug!("setup finished");
+    login(config)?;
     let urls = Arc::new(Mutex::new(Vec::from_iter(config.accounts.clone())));
     let (tx, rx) = mpsc::channel();
     let mut handles = Vec::with_capacity(config.worker);
     trace!("starting {} workers", config.worker);
     for _ in 0..config.worker {
-        let context = browser.new_context()?;
-        let tab = context.new_tab()?;
+        let browser = new_browser(config)?;
+        let tab = browser.new_tab()?;
+        tab.set_user_agent(USER_AGENT, None, None)?;
         let tx = tx.clone();
         let urls = urls.clone();
         handles.push(thread::spawn(move || scraper(tab, urls, tx)));
