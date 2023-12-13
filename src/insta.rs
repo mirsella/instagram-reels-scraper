@@ -3,7 +3,7 @@ use crate::config::{Config, USER_AGENT};
 use anyhow::Result;
 use core::fmt;
 use headless_chrome::{Browser, LaunchOptionsBuilder};
-use log::{debug, error, trace};
+use log::{debug, error, info, trace};
 use scraper::scraper;
 use serde_json::Value;
 use std::{
@@ -115,13 +115,11 @@ pub fn run(config: &Config) -> Result<Receiver<Reel>> {
     trace!("starting {} workers", config.worker);
     for _ in 0..config.worker {
         let browser = new_browser(config)?;
-        let tab = browser.new_tab()?;
-        tab.set_user_agent(USER_AGENT, None, None)?;
         let tx = tx.clone();
         let urls = urls.clone();
-        handles.push(thread::spawn(move || scraper(tab, urls, tx)));
+        handles.push(thread::spawn(move || scraper(browser, urls, tx)));
     }
-    trace!("waiting for workers to finish");
+    trace!("waiting for {} workers to finish", handles.len());
     while !handles.is_empty() {
         if let Some(pos) = handles.iter().position(|h| h.is_finished()) {
             match handles.remove(pos).join() {
@@ -133,7 +131,7 @@ pub fn run(config: &Config) -> Result<Receiver<Reel>> {
                     error!("worker thread panicked: {e:?}");
                     // TODO: telegram
                 }
-                _ => (),
+                _ => info!("worker thread finished"),
             }
         }
         sleep(Duration::from_millis(100));
