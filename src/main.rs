@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use config::Config;
 use env_logger::Builder;
 use insta::run;
-use log::{debug, info};
+use log::{info, trace};
 use std::env;
 
 fn main() -> Result<()> {
@@ -20,7 +20,7 @@ fn main() -> Result<()> {
         reels.push(reel);
     }
     for reel in reels.iter() {
-        debug!("{}", reel);
+        trace!("{}", reel);
     }
     info!("total: {}", reels.len());
     Ok(())

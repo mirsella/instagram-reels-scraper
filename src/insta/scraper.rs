@@ -3,7 +3,7 @@ use crate::config::USER_AGENT;
 use super::Reel;
 use anyhow::anyhow;
 use headless_chrome::Browser;
-use log::{debug, trace};
+use log::{debug, info, trace};
 use std::{
     sync::{
         mpsc::{self, Sender},
@@ -22,13 +22,18 @@ pub fn scraper(
     browser: Browser,
     accounts: Arc<Mutex<Vec<String>>>,
     tx: Sender<Reel>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<String> {
+    let id: String = thread::current()
+        .name()
+        .map(ToString::to_string)
+        .unwrap_or(format!("id:{:?}", thread::current().id()));
     let (unlocker, locker) = mpsc::channel();
     let tab = browser.new_tab()?;
     tab.set_user_agent(USER_AGENT, None, None)?;
     {
         let t = &tab;
         let tab = tab.clone();
+        let id = id.clone();
         t.register_response_handling(
             "reels",
             Box::new(move |res, fetch_body| {
@@ -39,7 +44,7 @@ pub fn scraper(
                 {
                     return;
                 }
-                trace!("got /clips/user/ response");
+                trace!("{id} got /clips/user/ response");
                 let mut body = None;
                 for i in 0..10 {
                     if let Ok(b) = fetch_body() {
@@ -57,7 +62,7 @@ pub fn scraper(
                     None => return unlocker.send(Cmd::NoResponse).unwrap(),
                 };
                 let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-                trace!("sending reels to main thread");
+                trace!("{id} sending reels to main thread");
                 for reel in body["items"].as_array().unwrap() {
                     tx.send(reel.into()).unwrap();
                 }
@@ -65,13 +70,21 @@ pub fn scraper(
             }),
         )?;
     }
-    while let Some(account) = accounts.lock().unwrap().pop() {
-        debug!("scraping reels of {}", account);
+    loop {
+        let account = if let Some(account) = accounts.lock().unwrap().pop() {
+            account
+        } else {
+            break;
+        };
+        debug!("{id} scraping reels of {account}");
         tab.navigate_to(&format!("https://www.instagram.com/{account}/reels/"))?
             .wait_until_navigated()?;
+        // FIX: recv_timeout
         if let Cmd::NoResponse = locker.recv().unwrap() {
-            return Err(anyhow!("didn't get a response on {account}"));
+            return Err(anyhow!("{id} didn't get a response on {account}"));
         };
     }
-    Ok(())
+    tab.deregister_response_handling_all().unwrap();
+    info!("{id} finished scraping reels");
+    Ok(id.to_string())
 }

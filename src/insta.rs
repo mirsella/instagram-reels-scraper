@@ -1,7 +1,8 @@
 mod scraper;
 use crate::config::{Config, USER_AGENT};
 use anyhow::Result;
-use core::fmt;
+use chrono::{DateTime, Utc};
+use core::{fmt, panic};
 use headless_chrome::{Browser, LaunchOptionsBuilder};
 use log::{debug, error, info, trace};
 use scraper::scraper;
@@ -24,6 +25,7 @@ pub struct Reel {
     pub comments: usize,
     pub views: usize,
     pub duration: usize,
+    pub date: DateTime<Utc>,
 }
 impl From<&Value> for Reel {
     fn from(value: &Value) -> Self {
@@ -32,11 +34,20 @@ impl From<&Value> for Reel {
             .get("caption")
             .map(|v: &Value| v["text"].clone())
             .unwrap_or_default();
-        let id = reel["code"].as_str().unwrap_or_default().into();
-        let views = reel["play_count"].as_u64().unwrap_or_default() as usize;
-        let like = reel["like_count"].as_u64().unwrap_or_default() as usize;
-        let comments = reel["comment_count"].as_u64().unwrap_or_default() as usize;
-        let duration = reel["video_duration"].as_u64().unwrap_or_default() as usize;
+        let id = reel["code"].as_str().unwrap().into();
+        let views = reel["play_count"].as_u64().unwrap_or_else(|| {
+            reel["view_count"]
+                .as_u64()
+                .unwrap_or_else(|| panic!("no views, {id}, {reel}"))
+        }) as usize;
+        let like = reel["like_count"].as_u64().unwrap() as usize;
+        let comments = reel["comment_count"].as_u64().unwrap() as usize;
+        let duration = reel["video_duration"].as_f64().unwrap() as usize;
+        let epoch_time = reel["device_timestamp"].as_f64().unwrap() as usize;
+        let date = DateTime::from_timestamp(epoch_time as i64, 0).unwrap_or_else(|| {
+            DateTime::from_timestamp((epoch_time / 1_000_000) as i64, 0)
+                .unwrap_or_else(|| panic!("invalid epoch time: {}", epoch_time))
+        });
         Self {
             caption: caption.as_str().unwrap_or("no caption").into(),
             id,
@@ -44,6 +55,7 @@ impl From<&Value> for Reel {
             like,
             comments,
             duration,
+            date,
         }
     }
 }
@@ -51,8 +63,8 @@ impl fmt::Display for Reel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Reel {}:{:.40}, {} likes, {} comments, {} views, {}",
-            self.id, self.caption, self.like, self.comments, self.views, self.duration
+            "Reel {}: {:.40}, {} likes, {} comments, {} views, {} seconds, {}",
+            self.id, self.caption, self.like, self.comments, self.views, self.duration, self.date
         )
     }
 }
@@ -97,7 +109,6 @@ fn login(config: &Config) -> Result<()> {
 }
 
 fn new_browser(config: &Config) -> Result<Browser> {
-    trace!("launching browser");
     Browser::new(
         LaunchOptionsBuilder::default()
             .user_data_dir(Some(config.chromedata.clone()))
@@ -113,28 +124,36 @@ pub fn run(config: &Config) -> Result<Receiver<Reel>> {
     let (tx, rx) = mpsc::channel();
     let mut handles = Vec::with_capacity(config.worker);
     trace!("starting {} workers", config.worker);
-    for _ in 0..config.worker {
+    for i in 0..config.worker {
         let browser = new_browser(config)?;
         let tx = tx.clone();
         let urls = urls.clone();
-        handles.push(thread::spawn(move || scraper(browser, urls, tx)));
+        handles.push(
+            thread::Builder::new()
+                .name(i.to_string())
+                .spawn(move || scraper(browser, urls, tx))
+                .unwrap(),
+        );
     }
-    trace!("waiting for {} workers to finish", handles.len());
-    while !handles.is_empty() {
-        if let Some(pos) = handles.iter().position(|h| h.is_finished()) {
-            match handles.remove(pos).join() {
-                Ok(Err(e)) => {
-                    error!("worker thread error: {e:?}");
-                    // TODO: telegram
+    drop(tx);
+    thread::spawn(move || {
+        trace!("waiting for {} workers to finish", handles.len());
+        while !handles.is_empty() {
+            if let Some(pos) = handles.iter().position(|h| h.is_finished()) {
+                match handles.remove(pos).join() {
+                    Ok(Err(e)) => {
+                        error!("worker thread error: {e:?}");
+                        // TODO: telegram
+                    }
+                    Err(e) => {
+                        error!("worker thread panicked: {e:?}");
+                        // TODO: telegram
+                    }
+                    Ok(Ok(id)) => info!("{id} worker thread finished"),
                 }
-                Err(e) => {
-                    error!("worker thread panicked: {e:?}");
-                    // TODO: telegram
-                }
-                _ => info!("worker thread finished"),
             }
+            sleep(Duration::from_millis(100));
         }
-        sleep(Duration::from_millis(100));
-    }
+    });
     Ok(rx)
 }
