@@ -1,3 +1,4 @@
+mod browserwithtmpdir;
 mod config;
 mod insta;
 
@@ -5,7 +6,7 @@ use anyhow::{Context, Result};
 use config::Config;
 use env_logger::Builder;
 use insta::run;
-use log::{info, trace};
+use log::info;
 use std::env;
 
 fn main() -> Result<()> {
@@ -14,14 +15,13 @@ fn main() -> Result<()> {
         .init();
     dotenvy::dotenv().context("loading .env")?;
     let config: Config = envy::from_env().context("failed to parse environment variables")?;
+
     let mut reels = Vec::with_capacity(100);
-    let rx = run(&config).context("setting up insta")?;
+    let (rx, runner) = run(&config).context("setting up insta")?;
     while let Ok(reel) = rx.recv() {
         reels.push(reel);
     }
-    for reel in reels.iter() {
-        trace!("{}", reel);
-    }
+    runner.join().unwrap();
     info!("total: {}", reels.len());
     Ok(())
 }

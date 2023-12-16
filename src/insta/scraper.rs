@@ -1,12 +1,11 @@
-use crate::config::USER_AGENT;
+use crate::{browserwithtmpdir::BrowserWithTmpDir, config::USER_AGENT};
 
 use super::Reel;
-use anyhow::anyhow;
-use headless_chrome::Browser;
+use anyhow::{anyhow, Context};
 use log::{debug, info, trace};
 use std::{
     sync::{
-        mpsc::{self, Sender},
+        mpsc::{self, RecvTimeoutError, Sender},
         Arc, Mutex,
     },
     thread,
@@ -15,11 +14,11 @@ use std::{
 
 enum Cmd {
     None,
-    NoResponse,
+    NoBody,
 }
 
 pub fn scraper(
-    browser: Browser,
+    browser: BrowserWithTmpDir,
     accounts: Arc<Mutex<Vec<String>>>,
     tx: Sender<Reel>,
 ) -> anyhow::Result<String> {
@@ -29,12 +28,11 @@ pub fn scraper(
         .unwrap_or(format!("id:{:?}", thread::current().id()));
     let (unlocker, locker) = mpsc::channel();
     let tab = browser.new_tab()?;
+    tab.enable_stealth_mode()?;
     tab.set_user_agent(USER_AGENT, None, None)?;
     {
-        let t = &tab;
-        let tab = tab.clone();
         let id = id.clone();
-        t.register_response_handling(
+        tab.register_response_handling(
             "reels",
             Box::new(move |res, fetch_body| {
                 if !res
@@ -46,20 +44,21 @@ pub fn scraper(
                 }
                 trace!("{id} got /clips/user/ response");
                 let mut body = None;
-                for i in 0..10 {
+                for i in 1..10 {
                     if let Ok(b) = fetch_body() {
                         body = Some(b.body);
                         break;
                     }
-                    if i >= 8 {
-                        tab.reload(true, None).unwrap();
-                        thread::sleep(Duration::from_secs(10));
-                    }
-                    thread::sleep(Duration::from_millis(100 * i * 2));
+                    debug!("{id} waiting for body {i}/10");
+                    thread::sleep(Duration::from_secs(i));
                 }
                 let body: String = match body {
                     Some(b) => b,
-                    None => return unlocker.send(Cmd::NoResponse).unwrap(),
+                    None => {
+                        let res = unlocker.send(Cmd::NoBody);
+                        debug!("{id} unlocking with NoBody: {res:?}");
+                        return;
+                    }
                 };
                 let body: serde_json::Value = serde_json::from_str(&body).unwrap();
                 trace!("{id} sending reels to main thread");
@@ -77,12 +76,22 @@ pub fn scraper(
             break;
         };
         debug!("{id} scraping reels of {account}");
-        tab.navigate_to(&format!("https://www.instagram.com/{account}/reels/"))?
-            .wait_until_navigated()?;
-        // FIX: recv_timeout
-        if let Cmd::NoResponse = locker.recv().unwrap() {
-            return Err(anyhow!("{id} didn't get a response on {account}"));
-        };
+        tab.navigate_to(&format!("https://www.instagram.com/{account}/reels/"))
+            .context("navigate_to")?;
+        match locker.recv_timeout(Duration::from_secs(60)) {
+            Ok(Cmd::None) => (),
+            Ok(Cmd::NoBody) => {
+                tab.deregister_response_handling_all().unwrap();
+                return Err(anyhow!("{id} couldn't get a body from {account}"));
+            }
+            Err(RecvTimeoutError::Disconnected) => break,
+            Err(RecvTimeoutError::Timeout) => {
+                tab.deregister_response_handling_all().unwrap();
+                return Err(anyhow!(
+                    "{id} timeout while waiting for responde handler for {account}"
+                ));
+            }
+        }
     }
     tab.deregister_response_handling_all().unwrap();
     info!("{id} finished scraping reels");

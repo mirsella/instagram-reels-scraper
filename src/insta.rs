@@ -1,29 +1,31 @@
 mod scraper;
-use crate::config::{Config, USER_AGENT};
-use anyhow::Result;
+use crate::{
+    browserwithtmpdir::BrowserWithTmpDir,
+    config::{Config, USER_AGENT},
+};
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use core::{fmt, panic};
-use headless_chrome::{Browser, LaunchOptionsBuilder};
 use log::{debug, error, info, trace};
 use scraper::scraper;
 use serde_json::Value;
 use std::{
-    ffi::OsStr,
     sync::{
         mpsc::{self, Receiver},
         Arc, Mutex,
     },
-    thread::{self, sleep},
+    thread::{self, sleep, JoinHandle},
     time::Duration,
 };
 
 #[derive(Debug, Default)]
 pub struct Reel {
     pub id: String,
+    pub account: String,
     pub caption: String,
     pub like: usize,
     pub comments: usize,
-    pub views: usize,
+    pub views: Option<usize>,
     pub duration: usize,
     pub date: DateTime<Utc>,
 }
@@ -35,11 +37,10 @@ impl From<&Value> for Reel {
             .map(|v: &Value| v["text"].clone())
             .unwrap_or_default();
         let id = reel["code"].as_str().unwrap().into();
-        let views = reel["play_count"].as_u64().unwrap_or_else(|| {
-            reel["view_count"]
-                .as_u64()
-                .unwrap_or_else(|| panic!("no views, {id}, {reel}"))
-        }) as usize;
+        let views = reel["play_count"]
+            .as_u64()
+            .or_else(|| reel["view_count"].as_u64())
+            .map(|v| v as usize);
         let like = reel["like_count"].as_u64().unwrap() as usize;
         let comments = reel["comment_count"].as_u64().unwrap() as usize;
         let duration = reel["video_duration"].as_f64().unwrap() as usize;
@@ -48,6 +49,8 @@ impl From<&Value> for Reel {
             DateTime::from_timestamp((epoch_time / 1_000_000) as i64, 0)
                 .unwrap_or_else(|| panic!("invalid epoch time: {}", epoch_time))
         });
+        // println!("\n{:#}\n", reel);
+        let account = reel["user"]["username"].as_str().unwrap().to_string();
         Self {
             caption: caption.as_str().unwrap_or("no caption").into(),
             id,
@@ -56,6 +59,7 @@ impl From<&Value> for Reel {
             comments,
             duration,
             date,
+            account,
         }
     }
 }
@@ -63,22 +67,31 @@ impl fmt::Display for Reel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Reel {}: {:.40}, {} likes, {} comments, {} views, {} seconds, {}",
-            self.id, self.caption, self.like, self.comments, self.views, self.duration, self.date
+            "{}{}: {:.40}, {} likes, {} comments, {:#?} views, {} seconds, {}",
+            self.account,
+            self.id,
+            self.caption,
+            self.like,
+            self.comments,
+            self.views,
+            self.duration,
+            self.date
         )
     }
 }
 
 fn login(config: &Config) -> Result<()> {
-    let browser = new_browser(config)?;
+    info!("login");
+    let browser = BrowserWithTmpDir::new(config, false).context("new browser")?;
     let tab = browser.new_tab()?;
+    tab.enable_stealth_mode()?;
     tab.set_user_agent(USER_AGENT, None, None)?;
     tab.navigate_to("https://www.instagram.com/accounts/login/")?
         .wait_until_navigated()?;
     if let Ok(el) = tab.find_element_by_xpath(
         "//button[contains(text(), 'Allow all cookies') or contains(text(), 'Accepter')]",
     ) {
-        debug!("accepting cookies");
+        trace!("accepting cookies");
         el.click()?;
         tab.wait_until_navigated()?;
         sleep(Duration::from_secs(2));
@@ -105,27 +118,18 @@ fn login(config: &Config) -> Result<()> {
         }
         tab.wait_until_navigated()?;
     }
+    info!("logged in");
     Ok(())
 }
 
-fn new_browser(config: &Config) -> Result<Browser> {
-    Browser::new(
-        LaunchOptionsBuilder::default()
-            .user_data_dir(Some(config.chromedata.clone()))
-            .args(vec![OsStr::new("--blink-settings=imagesEnabled=false")])
-            .headless(config.headless)
-            .build()?,
-    )
-}
-
-pub fn run(config: &Config) -> Result<Receiver<Reel>> {
+pub fn run(config: &Config) -> Result<(Receiver<Reel>, JoinHandle<()>)> {
     login(config)?;
     let urls = Arc::new(Mutex::new(Vec::from_iter(config.accounts.clone())));
     let (tx, rx) = mpsc::channel();
     let mut handles = Vec::with_capacity(config.worker);
     trace!("starting {} workers", config.worker);
     for i in 0..config.worker {
-        let browser = new_browser(config)?;
+        let browser = BrowserWithTmpDir::new(config, true)?;
         let tx = tx.clone();
         let urls = urls.clone();
         handles.push(
@@ -135,8 +139,7 @@ pub fn run(config: &Config) -> Result<Receiver<Reel>> {
                 .unwrap(),
         );
     }
-    drop(tx);
-    thread::spawn(move || {
+    let handle = thread::spawn(move || {
         trace!("waiting for {} workers to finish", handles.len());
         while !handles.is_empty() {
             if let Some(pos) = handles.iter().position(|h| h.is_finished()) {
@@ -152,8 +155,9 @@ pub fn run(config: &Config) -> Result<Receiver<Reel>> {
                     Ok(Ok(id)) => info!("{id} worker thread finished"),
                 }
             }
-            sleep(Duration::from_millis(100));
+            sleep(Duration::from_millis(10));
         }
+        info!("all worker threads finished");
     });
-    Ok(rx)
+    Ok((rx, handle))
 }
