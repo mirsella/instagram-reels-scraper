@@ -25,7 +25,7 @@ impl BrowserWithTmpDir {
                 let tmpdir = tempfile::tempdir().context("creating tempdir")?;
                 let status = Command::new("cp")
                     .arg("-r")
-                    .arg(&config.chromedata)
+                    .arg(format!("{}/Default", config.chromedata.to_str().unwrap()))
                     .arg(tmpdir.path())
                     .status()
                     .expect("failed to execute cp -r");

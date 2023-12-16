@@ -143,16 +143,22 @@ pub fn run(config: &Config) -> Result<(Receiver<Reel>, JoinHandle<()>)> {
         trace!("waiting for {} workers to finish", handles.len());
         while !handles.is_empty() {
             if let Some(pos) = handles.iter().position(|h| h.is_finished()) {
-                match handles.remove(pos).join() {
+                let handle = handles.remove(pos);
+                let name = handle
+                    .thread()
+                    .name()
+                    .map(ToString::to_string)
+                    .unwrap_or(format!("id:{:?}", thread::current().id()));
+                match handle.join() {
                     Ok(Err(e)) => {
-                        error!("worker thread error: {e:?}");
+                        error!("worker {name} thread error: {e:?}");
                         // TODO: telegram
                     }
                     Err(e) => {
-                        error!("worker thread panicked: {e:?}");
+                        error!("worker {name} thread panicked: {e:?}");
                         // TODO: telegram
                     }
-                    Ok(Ok(id)) => info!("{id} worker thread finished"),
+                    Ok(Ok(id)) => info!("{name}({id}) worker thread finished"),
                 }
             }
             sleep(Duration::from_millis(10));
