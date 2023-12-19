@@ -27,6 +27,7 @@ pub struct Config {
     pub headless: bool,
     #[serde(default = "_default_chromedata")]
     pub chromedata: PathBuf,
-    // TODO: telegram notification
+    pub telegram_token: String,
+    pub telegram_chat_id: String,
     // TODO: slack file
 }

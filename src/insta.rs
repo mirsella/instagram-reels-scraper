@@ -6,6 +6,7 @@ use crate::{
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use core::{fmt, panic};
+use futures::executor::block_on;
 use log::{debug, error, info, trace};
 use scraper::scraper;
 use serde_json::Value;
@@ -139,6 +140,7 @@ pub fn run(config: &Config) -> Result<(Receiver<Reel>, JoinHandle<()>)> {
                 .unwrap(),
         );
     }
+    let telegram = rustygram::create_bot(&config.telegram_token, &config.telegram_chat_id);
     let handle = thread::spawn(move || {
         trace!("waiting for {} workers to finish", handles.len());
         while !handles.is_empty() {
@@ -152,11 +154,23 @@ pub fn run(config: &Config) -> Result<(Receiver<Reel>, JoinHandle<()>)> {
                 match handle.join() {
                     Ok(Err(e)) => {
                         error!("worker {name} thread error: {e:?}");
-                        // TODO: telegram
+                        if let Err(te) = block_on(telegram.send_message(
+                            &format!("instagram-reels-scraper: worker {name} thread error: {e:?}"),
+                            None,
+                        )) {
+                            error!("telegram error: {te:?}");
+                        }
                     }
                     Err(e) => {
                         error!("worker {name} thread panicked: {e:?}");
-                        // TODO: telegram
+                        if let Err(te) = block_on(telegram.send_message(
+                            &format!(
+                                "instagram-reels-scraper: worker {name} thread panicked: {e:?}"
+                            ),
+                            None,
+                        )) {
+                            error!("telegram error: {te:?}");
+                        }
                     }
                     Ok(Ok(id)) => info!("{name}({id}) worker thread finished"),
                 }
