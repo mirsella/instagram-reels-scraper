@@ -9,6 +9,7 @@ use core::{fmt, panic};
 use futures::executor::block_on;
 use log::{debug, error, info, trace};
 use scraper::scraper;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     sync::{
@@ -19,7 +20,7 @@ use std::{
     time::Duration,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Reel {
     pub id: String,
     pub account: String,
