@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use core::{fmt, panic};
+use core::fmt;
 use futures::executor::block_on;
 use log::{debug, error, info, trace};
 use scraper::scraper;
@@ -22,13 +22,16 @@ use std::{
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Reel {
+    #[serde(skip_serializing)]
     pub id: String,
+    pub link: String,
     pub account: String,
     pub caption: String,
     pub like: usize,
     pub comments: usize,
     pub views: Option<usize>,
     pub duration: usize,
+    #[serde(skip_serializing)]
     pub date: DateTime<Utc>,
 }
 impl From<&Value> for Reel {
@@ -55,6 +58,7 @@ impl From<&Value> for Reel {
         let account = reel["user"]["username"].as_str().unwrap().to_string();
         Self {
             caption: caption.as_str().unwrap_or("no caption").into(),
+            link: format!("https://www.instagram.com/reel/{}/", id),
             id,
             views,
             like,
@@ -69,7 +73,7 @@ impl fmt::Display for Reel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}{}: {:.40}, {} likes, {} comments, {:#?} views, {} seconds, {}",
+            "{}{}: {:.40}, {} likes, {} comments, {:#?} views, {} seconds",
             self.account,
             self.id,
             self.caption,
@@ -77,7 +81,7 @@ impl fmt::Display for Reel {
             self.comments,
             self.views,
             self.duration,
-            self.date
+            // self.date
         )
     }
 }

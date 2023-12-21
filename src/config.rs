@@ -29,5 +29,6 @@ pub struct Config {
     pub chromedata: PathBuf,
     pub telegram_token: String,
     pub telegram_chat_id: String,
-    // TODO: slack file
+    pub slack_token: String,
+    pub slack_channel: String,
 }

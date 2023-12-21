@@ -1,25 +1,23 @@
 mod browserwithtmpdir;
 mod config;
 mod insta;
+mod slack;
 
 use anyhow::{Context, Result};
 use config::Config;
 use env_logger::Builder;
 use insta::run;
 use log::info;
-use std::time::Duration;
 use std::{env, path::PathBuf};
 use tempfile::tempdir;
 
 fn main() -> Result<()> {
-    let date = chrono::Local::now();
-    println!("date: {date}, {date:?}, {date:#?}, {date:#}");
-    println!("date: {}", date.to_string());
     Builder::new()
         .parse_filters(&env::var("RUST_LOG").unwrap_or("instagram_reels_scraper=trace".into()))
         .init();
     dotenvy::dotenv().context("loading .env")?;
     let config: Config = envy::from_env().context("failed to parse environment variables")?;
+    let slack = slack::SlackFileSender::new(&config.slack_token, &config.slack_channel);
 
     let mut reels = Vec::with_capacity(100);
     let (rx, runner) = run(&config).context("setting up insta")?;
@@ -28,21 +26,26 @@ fn main() -> Result<()> {
     }
     runner.join().unwrap();
     info!("total: {}", reels.len());
+
     let tmpdir = tempdir()?;
     let date = chrono::Local::now();
     let yesterday = date - chrono::Duration::days(1);
     let all_path = write_to_file(
-        tmpdir.path().join(format!("all-reels-${date}")),
+        tmpdir.path().join(format!(
+            "all-reels-{}.csv",
+            date.format("%Y-%m-%d:%H:%M:%S")
+        )),
         reels.iter(),
     )?;
     let oneday_path = write_to_file(
-        tmpdir.path().join(format!("reels-since-${yesterday}")),
+        tmpdir.path().join(format!(
+            "reels-since-{}",
+            yesterday.format("%Y-%m-%d:%H:%M:%S.csv")
+        )),
         reels.iter().filter(|reel| reel.date >= yesterday),
     )?;
-    // TODO: send all_path + oneday_path to slack
-    println!("all_path: {:?}", all_path);
-    println!("oneday_path: {:?}", oneday_path);
-    std::thread::sleep(Duration::from_secs(60));
+    slack.send_file(&all_path)?;
+    slack.send_file(&oneday_path)?;
     Ok(())
 }
 
