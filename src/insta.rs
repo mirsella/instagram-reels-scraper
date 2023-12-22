@@ -1,16 +1,14 @@
+mod reel;
 mod scraper;
 use crate::{
     browserwithtmpdir::BrowserWithTmpDir,
     config::{Config, USER_AGENT},
+    telegram::Telegram,
 };
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
-use core::fmt;
-use futures::executor::block_on;
 use log::{debug, error, info, trace};
+pub use reel::Reel;
 use scraper::scraper;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::{
     sync::{
         mpsc::{self, Receiver},
@@ -19,68 +17,6 @@ use std::{
     thread::{self, sleep, JoinHandle},
     time::Duration,
 };
-
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Reel {
-    #[serde(skip_serializing)]
-    pub id: String,
-    pub link: String,
-    pub account: String,
-    pub caption: String,
-    pub like: usize,
-    pub comments: usize,
-    pub views: Option<usize>,
-    pub duration: usize,
-    pub date: DateTime<Utc>,
-}
-impl From<&Value> for Reel {
-    fn from(value: &Value) -> Self {
-        let reel = &value["media"];
-        let caption = reel
-            .get("caption")
-            .map(|v: &Value| v["text"].clone())
-            .unwrap_or_default();
-        let id = reel["code"].as_str().unwrap().into();
-        let views = reel["play_count"]
-            .as_u64()
-            .or_else(|| reel["view_count"].as_u64())
-            .map(|v| v as usize);
-        let like = reel["like_count"].as_u64().unwrap() as usize;
-        let comments = reel["comment_count"].as_u64().unwrap() as usize;
-        let duration = reel["video_duration"].as_f64().unwrap() as usize;
-        let epoch_time_unknown = reel["device_timestamp"].as_u64().unwrap();
-        let epoch_time_ms: usize = format!("{epoch_time_unknown:0<16}").parse().unwrap();
-        let date = DateTime::from_timestamp(epoch_time_ms as i64 / 1000, 0).unwrap_or_default();
-        let account = reel["user"]["username"].as_str().unwrap().to_string();
-        Self {
-            caption: caption.as_str().unwrap_or("no caption").into(),
-            link: format!("https://www.instagram.com/reel/{}/", id),
-            id,
-            views,
-            like,
-            comments,
-            duration,
-            date,
-            account,
-        }
-    }
-}
-impl fmt::Display for Reel {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}{}: {:.40}, {} likes, {} comments, {:#?} views, {} seconds",
-            self.account,
-            self.id,
-            self.caption,
-            self.like,
-            self.comments,
-            self.views,
-            self.duration,
-            // self.date
-        )
-    }
-}
 
 fn login(config: &Config) -> Result<()> {
     info!("login");
@@ -141,7 +77,7 @@ pub fn run(config: &Config) -> Result<(Receiver<Reel>, JoinHandle<()>)> {
                 .unwrap(),
         );
     }
-    let telegram = rustygram::create_bot(&config.telegram_token, &config.telegram_chat_id);
+    let telegram = Telegram::new(&config.telegram_token, &config.telegram_chat_id);
     let handle = thread::spawn(move || {
         trace!("waiting for {} workers to finish", handles.len());
         while !handles.is_empty() {
@@ -155,20 +91,16 @@ pub fn run(config: &Config) -> Result<(Receiver<Reel>, JoinHandle<()>)> {
                 match handle.join() {
                     Ok(Err(e)) => {
                         error!("worker {name} thread error: {e:?}");
-                        if let Err(te) = block_on(telegram.send_message(
-                            &format!("instagram-reels-scraper: worker {name} thread error: {e:?}"),
-                            None,
+                        if let Err(te) = telegram.send(&format!(
+                            "instagram-reels-scraper: worker {name} thread error: {e:?}"
                         )) {
                             error!("telegram error: {te:?}");
                         }
                     }
                     Err(e) => {
                         error!("worker {name} thread panicked: {e:?}");
-                        if let Err(te) = block_on(telegram.send_message(
-                            &format!(
-                                "instagram-reels-scraper: worker {name} thread panicked: {e:?}"
-                            ),
-                            None,
+                        if let Err(te) = telegram.send(&format!(
+                            "instagram-reels-scraper: worker {name} thread panicked: {e:?}"
                         )) {
                             error!("telegram error: {te:?}");
                         }

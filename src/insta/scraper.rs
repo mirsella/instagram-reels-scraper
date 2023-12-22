@@ -1,9 +1,12 @@
 use super::Reel;
 use crate::{browserwithtmpdir::BrowserWithTmpDir, config::USER_AGENT};
 use anyhow::Context;
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use std::{
-    sync::{mpsc::Sender, Arc, Mutex},
+    sync::{
+        mpsc::{self, Sender},
+        Arc, Mutex,
+    },
     thread,
     time::Duration,
 };
@@ -11,7 +14,7 @@ use std::{
 pub fn scraper(
     browser: BrowserWithTmpDir,
     accounts: Arc<Mutex<Vec<String>>>,
-    tx: Sender<Reel>,
+    main_tx: Sender<Reel>,
 ) -> anyhow::Result<String> {
     let id: String = thread::current()
         .name()
@@ -20,6 +23,7 @@ pub fn scraper(
     let tab = browser.new_tab()?;
     tab.enable_stealth_mode()?;
     tab.set_user_agent(USER_AGENT, None, None)?;
+    let (tx, rx) = mpsc::channel::<Reel>();
     {
         let id = id.clone();
         tab.register_response_handling(
@@ -53,10 +57,23 @@ pub fn scraper(
         debug!("{id}: scraping reels of {account}");
         tab.navigate_to(&format!("https://www.instagram.com/{account}/reels/"))
             .context("navigate_to")?;
-        // .wait_until_navigated()
-        // .context("wait_until_navigated")?;
+        if let Err(e) = tab.wait_for_element("a[href$='followers/']>span") {
+            error!("{id}: couldn't find followers element for {account}: {e}");
+            accounts.lock().unwrap().insert(0, account);
+            continue;
+        };
+        let followers: usize = tab
+            .wait_for_element("a[href$='followers/']>span")
+            .context("wait_for_element on followers")?
+            .get_attribute_value("title")?
+            .unwrap()
+            .replace(',', "")
+            .parse()?;
         info!("{id}: waiting 30s for responses");
-        thread::sleep(Duration::from_secs(30));
+        while let Ok(mut reel) = rx.recv_timeout(Duration::from_secs(30)) {
+            reel.set_ratio(followers);
+            main_tx.send(reel)?;
+        }
     }
     tab.deregister_response_handling_all().unwrap();
     info!("{id}: finished scraping reels");

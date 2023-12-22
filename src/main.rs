@@ -2,6 +2,7 @@ mod browserwithtmpdir;
 mod config;
 mod insta;
 mod slack;
+mod telegram;
 
 use anyhow::{Context, Result};
 use chrono::TimeZone;
@@ -25,6 +26,12 @@ fn main() -> Result<()> {
     while let Ok(reel) = rx.recv() {
         reels.push(reel);
     }
+    reels.sort_unstable_by(|a, b| {
+        a.ratio
+            .unwrap_or_default()
+            .total_cmp(&b.ratio.unwrap_or_default())
+    });
+    reels.reverse();
     runner.join().unwrap();
     info!("total: {}", reels.len());
 
@@ -35,18 +42,16 @@ fn main() -> Result<()> {
         let y = y.date_naive().and_hms_opt(0, 0, 0).unwrap();
         chrono::Local.from_local_datetime(&y).unwrap()
     };
-    println!("yesterday: {}", yesterday);
     let all_path = write_to_file(
-        tmpdir.path().join(format!(
-            "all-reels-{}.csv",
-            date.format("%Y-%m-%d %Hh%M.csv")
-        )),
+        tmpdir
+            .path()
+            .join(format!("all-reels-{}.csv", date.format("%Y-%m-%d %Hh%M"))),
         reels.iter(),
     )?;
     let oneday_path = write_to_file(
         tmpdir.path().join(format!(
-            "reels-since-{}",
-            yesterday.format("%Y-%m-%d %Hh%M.csv")
+            "reels-since-{}.csv",
+            yesterday.format("%Y-%m-%d %Hh%M")
         )),
         reels.iter().filter(|reel| reel.date >= yesterday),
     )?;

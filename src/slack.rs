@@ -26,11 +26,10 @@ impl SlackFileSender {
         let response = ureq::post("https://slack.com/api/files.upload")
             .set("Content-Type", &content_type)
             .send_bytes(&data)?;
-        let body = response.into_string()?;
-        let json: Value = serde_json::from_str(&body)?;
+        let json: Value = response.into_json()?;
         json.get("ok")
             .and_then(Value::as_bool)
-            .ok_or_else(|| anyhow!("field `ok` not found in response: {body}"))?;
+            .ok_or_else(|| anyhow!("field `ok` not found in response: {json:#}"))?;
         Ok(json)
     }
 }
