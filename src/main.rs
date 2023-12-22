@@ -4,6 +4,7 @@ mod insta;
 mod slack;
 
 use anyhow::{Context, Result};
+use chrono::TimeZone;
 use config::Config;
 use env_logger::Builder;
 use insta::run;
@@ -29,23 +30,29 @@ fn main() -> Result<()> {
 
     let tmpdir = tempdir()?;
     let date = chrono::Local::now();
-    let yesterday = date - chrono::Duration::days(1);
+    let yesterday = {
+        let y = date - chrono::Duration::days(1);
+        let y = y.date_naive().and_hms_opt(0, 0, 0).unwrap();
+        chrono::Local.from_local_datetime(&y).unwrap()
+    };
+    println!("yesterday: {}", yesterday);
     let all_path = write_to_file(
         tmpdir.path().join(format!(
             "all-reels-{}.csv",
-            date.format("%Y-%m-%d:%H:%M:%S")
+            date.format("%Y-%m-%d %Hh%M.csv")
         )),
         reels.iter(),
     )?;
     let oneday_path = write_to_file(
         tmpdir.path().join(format!(
             "reels-since-{}",
-            yesterday.format("%Y-%m-%d:%H:%M:%S.csv")
+            yesterday.format("%Y-%m-%d %Hh%M.csv")
         )),
         reels.iter().filter(|reel| reel.date >= yesterday),
     )?;
     slack.send_file(&all_path)?;
     slack.send_file(&oneday_path)?;
+    info!("done sending files to slack");
     Ok(())
 }
 
@@ -53,6 +60,7 @@ fn write_to_file<'a>(
     path: PathBuf,
     reels: impl Iterator<Item = &'a insta::Reel>,
 ) -> Result<PathBuf> {
+    info!("writing to {}", path.display());
     let mut wtr = csv::Writer::from_path(path.as_path())?;
     for reel in reels {
         wtr.serialize(reel)?;

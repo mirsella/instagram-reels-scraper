@@ -31,7 +31,6 @@ pub struct Reel {
     pub comments: usize,
     pub views: Option<usize>,
     pub duration: usize,
-    #[serde(skip_serializing)]
     pub date: DateTime<Utc>,
 }
 impl From<&Value> for Reel {
@@ -49,12 +48,9 @@ impl From<&Value> for Reel {
         let like = reel["like_count"].as_u64().unwrap() as usize;
         let comments = reel["comment_count"].as_u64().unwrap() as usize;
         let duration = reel["video_duration"].as_f64().unwrap() as usize;
-        let epoch_time = reel["device_timestamp"].as_f64().unwrap() as usize;
-        let date = DateTime::from_timestamp(epoch_time as i64, 0).unwrap_or_else(|| {
-            DateTime::from_timestamp((epoch_time / 1_000_000) as i64, 0)
-                .unwrap_or_else(|| panic!("invalid epoch time: {}", epoch_time))
-        });
-        // println!("\n{:#}\n", reel);
+        let epoch_time_unknown = reel["device_timestamp"].as_u64().unwrap();
+        let epoch_time_ms: usize = format!("{epoch_time_unknown:0<16}").parse().unwrap();
+        let date = DateTime::from_timestamp(epoch_time_ms as i64 / 1000, 0).unwrap_or_default();
         let account = reel["user"]["username"].as_str().unwrap().to_string();
         Self {
             caption: caption.as_str().unwrap_or("no caption").into(),
