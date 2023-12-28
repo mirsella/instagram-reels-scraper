@@ -19,6 +19,13 @@ impl SlackFileSender {
     pub fn send_file(&self, path: &Path) -> anyhow::Result<Value> {
         let (content_type, data) = MultipartBuilder::new()
             .add_file("file", path)?
+            .add_text(
+                "filetype",
+                path.extension()
+                    .ok_or(anyhow!("not extension for this filetype"))?
+                    .to_str()
+                    .unwrap(),
+            )?
             .add_text("channels", &self.channel)?
             .add_text("token", &self.token)?
             .finish()?;
@@ -30,6 +37,7 @@ impl SlackFileSender {
         json.get("ok")
             .and_then(Value::as_bool)
             .ok_or_else(|| anyhow!("field `ok` not found in response: {json:#}"))?;
+        info!("sent {path:?} to slack");
         Ok(json)
     }
 }

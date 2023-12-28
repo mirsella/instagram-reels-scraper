@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, process::Command};
+use std::{ffi::OsStr, process::Command, time::Duration};
 
 use anyhow::Context;
 use headless_chrome::{Browser, LaunchOptionsBuilder};
@@ -44,6 +44,7 @@ impl BrowserWithTmpDir {
             LaunchOptionsBuilder::default()
                 .user_data_dir(Some(datadir))
                 .args(vec![OsStr::new("--blink-settings=imagesEnabled=false")])
+                .idle_browser_timeout(Duration::from_secs(60))
                 .headless(config.headless)
                 .build()?,
         )

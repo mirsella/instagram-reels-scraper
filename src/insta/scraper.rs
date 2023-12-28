@@ -1,6 +1,8 @@
 use super::Reel;
 use crate::{browserwithtmpdir::BrowserWithTmpDir, config::USER_AGENT};
 use anyhow::Context;
+use headless_chrome::browser::tab::ResponseHandler;
+
 use log::{debug, error, info, trace, warn};
 use std::{
     sync::{
@@ -10,6 +12,8 @@ use std::{
     thread,
     time::Duration,
 };
+
+const TIMEOUT: Duration = Duration::from_secs(30);
 
 pub fn scraper(
     browser: BrowserWithTmpDir,
@@ -24,58 +28,63 @@ pub fn scraper(
     tab.enable_stealth_mode()?;
     tab.set_user_agent(USER_AGENT, None, None)?;
     let (tx, rx) = mpsc::channel::<Reel>();
-    {
+    let mut handler: ResponseHandler = {
         let id = id.clone();
-        tab.register_response_handling(
-            "reels",
-            Box::new(move |res, fetch_body| {
-                if !res.response.url.contains("clips/user") {
+        Box::new(move |res, fetch_body| {
+            if !res.response.url.contains("clips/user") {
+                return;
+            }
+            trace!("{id}: got clips response");
+            thread::sleep(Duration::from_secs(4));
+            let body = match fetch_body() {
+                Ok(body) => body.body,
+                Err(e) => {
+                    warn!("{id}: couldn't get a body from response: {e}");
                     return;
                 }
-                trace!("{id}: got clips response");
-                thread::sleep(Duration::from_secs(4));
-                let body = match fetch_body() {
-                    Ok(body) => body.body,
-                    Err(e) => {
-                        warn!("{id}: couldn't get a body from response: {e}");
-                        return;
-                    }
-                };
-                let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-                trace!("{id}: got body, sending reels to main thread");
-                for reel in body["items"].as_array().unwrap() {
-                    tx.send(reel.into()).unwrap();
-                }
-            }),
-        )?;
-    }
+            };
+            let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+            trace!("{id}: got body, sending reels to main thread");
+            for reel in body["items"].as_array().unwrap() {
+                tx.send(reel.into()).unwrap();
+            }
+        })
+    };
     loop {
         let account = match accounts.lock().unwrap().pop() {
             Some(account) => account,
             None => break,
         };
         debug!("{id}: scraping reels of {account}");
+        tab.register_response_handling("reels", handler)?;
         tab.navigate_to(&format!("https://www.instagram.com/{account}/reels/"))
             .context("navigate_to")?;
-        if let Err(e) = tab.wait_for_element("a[href$='followers/']>span") {
-            error!("{id}: couldn't find followers element for {account}: {e}");
-            accounts.lock().unwrap().insert(0, account);
-            continue;
-        };
-        let followers: usize = tab
-            .wait_for_element("a[href$='followers/']>span")
-            .context("wait_for_element on followers")?
-            .get_attribute_value("title")?
-            .unwrap()
-            .replace(',', "")
-            .parse()?;
-        info!("{id}: waiting 30s for responses");
-        while let Ok(mut reel) = rx.recv_timeout(Duration::from_secs(30)) {
+        let mut followers: usize = 0;
+        for _ in 0..20 {
+            if let Ok(el) = tab.find_element("a[href$='followers/']>span") {
+                let v = el
+                    .get_attribute_value("title")?
+                    .expect("expected title attribute")
+                    .replace(',', "")
+                    .parse()?;
+                followers = v;
+            }
+            thread::sleep(Duration::from_secs(1));
+        }
+        if followers == 0 {
+            error!("{id}: couldn't get followers count for {account}");
+            thread::park();
+            return Err(anyhow::anyhow!(
+                "couldn't get followers count for {account}"
+            ));
+        }
+        info!("{id}: waiting {TIMEOUT:?} for responses");
+        while let Ok(mut reel) = rx.recv_timeout(TIMEOUT) {
             reel.set_ratio(followers);
             main_tx.send(reel)?;
         }
+        handler = tab.deregister_response_handling("reels")?.unwrap();
     }
-    tab.deregister_response_handling_all().unwrap();
     info!("{id}: finished scraping reels");
     Ok(id.to_string())
 }

@@ -34,6 +34,7 @@ fn main() -> Result<()> {
     reels.reverse();
     runner.join().unwrap();
     info!("total: {}", reels.len());
+    assert!(!reels.is_empty());
 
     let tmpdir = tempdir()?;
     let date = chrono::Local::now();
@@ -45,19 +46,17 @@ fn main() -> Result<()> {
     let all_path = write_to_file(
         tmpdir
             .path()
-            .join(format!("all-reels-{}.csv", date.format("%Y-%m-%d %Hh%M"))),
+            .join(format!("all reels {}.csv", date.format("%Y-%m-%d %Hh%M"))),
         reels.iter(),
     )?;
     let oneday_path = write_to_file(
-        tmpdir.path().join(format!(
-            "reels-since-{}.csv",
-            yesterday.format("%Y-%m-%d %Hh%M")
-        )),
+        tmpdir
+            .path()
+            .join(format!("reels since {}.csv", yesterday.format("%Y-%m-%d"))),
         reels.iter().filter(|reel| reel.date >= yesterday),
     )?;
     slack.send_file(&all_path)?;
     slack.send_file(&oneday_path)?;
-    info!("done sending files to slack");
     Ok(())
 }
 
