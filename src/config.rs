@@ -20,6 +20,7 @@ pub const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) Apple
 pub struct Config {
     pub insta_user: String,
     pub insta_pass: String,
+    pub accounts_type: String,
     pub accounts: HashSet<String>,
     #[serde(default = "_default_worker")]
     pub worker: usize,

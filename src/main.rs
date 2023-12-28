@@ -44,15 +44,19 @@ fn main() -> Result<()> {
         chrono::Local.from_local_datetime(&y).unwrap()
     };
     let all_path = write_to_file(
-        tmpdir
-            .path()
-            .join(format!("all reels {}.csv", date.format("%Y-%m-%d %Hh%M"))),
+        tmpdir.path().join(format!(
+            "all {} reels {}.csv",
+            config.accounts_type,
+            date.format("%Y-%m-%d %Hh%M")
+        )),
         reels.iter(),
     )?;
     let oneday_path = write_to_file(
-        tmpdir
-            .path()
-            .join(format!("reels since {}.csv", yesterday.format("%Y-%m-%d"))),
+        tmpdir.path().join(format!(
+            "{} reels since {}.csv",
+            config.accounts_type,
+            yesterday.format("%Y-%m-%d")
+        )),
         reels.iter().filter(|reel| reel.date >= yesterday),
     )?;
     slack.send_file(&all_path)?;
