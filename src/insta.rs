@@ -27,9 +27,9 @@ fn login(config: &Config) -> Result<()> {
     tab.navigate_to("https://www.instagram.com/accounts/login/")?
         .wait_until_navigated()?;
     if let Ok(el) = tab.find_element_by_xpath(
-        "//button[contains(text(), 'Allow all cookies') or contains(text(), 'Accepter')]",
+        "//button[contains(text(), 'Decline') or contains(text(), 'Refuser')]",
     ) {
-        trace!("accepting cookies");
+        trace!("declining cookies");
         el.click()?;
         tab.wait_until_navigated()?;
         sleep(Duration::from_secs(2));
