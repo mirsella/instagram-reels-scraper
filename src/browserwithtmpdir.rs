@@ -2,6 +2,7 @@ use std::{ffi::OsStr, process::Command, time::Duration};
 
 use anyhow::Context;
 use headless_chrome::{Browser, LaunchOptionsBuilder};
+use log::debug;
 use tempfile::TempDir;
 
 use crate::config::Config;
@@ -20,6 +21,10 @@ impl std::ops::Deref for BrowserWithTmpDir {
 }
 impl BrowserWithTmpDir {
     pub fn new(config: &Config, copy: bool) -> anyhow::Result<BrowserWithTmpDir> {
+        debug!(
+            "new browser copy: {copy} and data path {}",
+            config.chromedata.display()
+        );
         let tmpdir = match copy {
             true => {
                 let tmpdir = tempfile::tempdir().context("creating tempdir")?;
