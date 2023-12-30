@@ -10,6 +10,7 @@ use log::{debug, error, info, trace};
 pub use reel::Reel;
 use scraper::scraper;
 use std::{
+    os::unix::thread,
     sync::{
         mpsc::{self, Receiver},
         Arc, Mutex,
@@ -48,13 +49,16 @@ fn login(config: &Config) -> Result<()> {
         {
             sleep(Duration::from_millis(100));
         }
+        thread::sleep(Duration::from_secs(2));
         tab.wait_until_navigated()?;
         trace!("finish waiting for redirect");
         if let Ok(el) = tab.find_element("button[type=button]") {
             trace!("save info");
             el.click()?;
         }
+        thread::sleep(Duration::from_secs(2));
         tab.wait_until_navigated()?;
+        thread::sleep(Duration::from_secs(2));
     }
     info!("logged in");
     Ok(())
