@@ -19,6 +19,12 @@ fn main() -> Result<()> {
         .init();
     dotenvy::dotenv().context("loading .env")?;
     let config: Config = envy::from_env().context("failed to parse environment variables")?;
+    info!(
+        "scraping `{}` reels from {} accounts: {:?}",
+        config.accounts_type,
+        config.accounts.len(),
+        config.accounts
+    );
     let slack = slack::SlackFileSender::new(&config.slack_token, &config.slack_channel);
 
     let mut reels = Vec::with_capacity(100);

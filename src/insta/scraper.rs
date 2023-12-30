@@ -13,7 +13,7 @@ use std::{
     time::Duration,
 };
 
-const TIMEOUT: Duration = Duration::from_secs(30);
+const TIMEOUT: Duration = Duration::from_secs(20);
 
 pub fn scraper(
     browser: BrowserWithTmpDir,

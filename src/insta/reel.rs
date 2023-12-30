@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, time::Duration};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, Serializer};
@@ -14,7 +14,8 @@ pub struct Reel {
     pub like: usize,
     pub comments: usize,
     pub views: Option<usize>,
-    pub duration: usize,
+    #[serde(serialize_with = "serialize_custom_duration")]
+    pub duration: Duration,
     #[serde(serialize_with = "serialize_custom_date")]
     pub date: DateTime<Utc>,
     pub caption: String,
@@ -33,7 +34,7 @@ impl From<&Value> for Reel {
             .map(|v| v as usize);
         let like = reel["like_count"].as_u64().unwrap() as usize;
         let comments = reel["comment_count"].as_u64().unwrap() as usize;
-        let duration = reel["video_duration"].as_f64().unwrap() as usize;
+        let duration = reel["video_duration"].as_f64().unwrap();
         let epoch_time_unknown = reel["device_timestamp"].as_u64().unwrap();
         let epoch_time_s: usize = format!("{:0<.10}", epoch_time_unknown.to_string())
             .parse()
@@ -47,7 +48,7 @@ impl From<&Value> for Reel {
             views,
             like,
             comments,
-            duration,
+            duration: Duration::from_secs_f64(duration),
             date,
             account,
             ..Default::default()
@@ -58,7 +59,7 @@ impl fmt::Display for Reel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}{}: {:.40}, {} likes, {} comments, {:#?} views, {} seconds",
+            "{}{}: {:.40}, {} likes, {} comments, {:#?} views, {:?}",
             self.account,
             self.id,
             self.caption,
@@ -76,10 +77,18 @@ impl Reel {
     }
 }
 
-fn serialize_custom_date<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
+fn serialize_custom_date<S: Serializer>(
+    date: &DateTime<Utc>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
     let formatted_date = date.format("%Y-%m-%d %H:%M:%S").to_string();
     serializer.serialize_str(&formatted_date)
+}
+
+fn serialize_custom_duration<S: Serializer>(
+    duration: &Duration,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let s = format!("{:?}", duration);
+    serializer.serialize_str(&s)
 }

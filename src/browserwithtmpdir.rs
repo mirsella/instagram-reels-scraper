@@ -46,6 +46,8 @@ impl BrowserWithTmpDir {
                 .args(vec![OsStr::new("--blink-settings=imagesEnabled=false")])
                 .idle_browser_timeout(Duration::from_secs(60))
                 .headless(config.headless)
+                .window_size(Some((1920, 1080)))
+                .sandbox(false)
                 .build()?,
         )
         .unwrap();
