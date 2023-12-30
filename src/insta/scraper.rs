@@ -77,6 +77,7 @@ pub fn scraper(
             error!("{id}: couldn't get followers count for {account}");
             let data = tab.capture_screenshot(Png, None, None, true).unwrap();
             std::fs::write(format!("screenshot-{account}"), data).unwrap();
+            info!("{id}: screenshot saved to screenshot-{account}");
             return Err(anyhow::anyhow!(
                 "couldn't get followers count for {account}"
             ));
