@@ -5,7 +5,7 @@ use headless_chrome::{
     browser::tab::ResponseHandler, protocol::cdp::Page::CaptureScreenshotFormatOption::Png,
 };
 
-use log::{debug, error, info, trace, warn};
+use log::{debug, info, trace, warn};
 use std::{
     sync::{
         mpsc::{self, Sender},
@@ -22,10 +22,11 @@ pub fn scraper(
     accounts: Arc<Mutex<Vec<String>>>,
     main_tx: Sender<Reel>,
 ) -> anyhow::Result<String> {
-    let id: String = thread::current()
+    let t = thread::current();
+    let id: String = t
         .name()
         .map(ToString::to_string)
-        .unwrap_or(format!("id:{:?}", thread::current().id()));
+        .unwrap_or(format!("id:{:?}", t.id()));
     let tab = browser.new_tab()?;
     tab.enable_stealth_mode()?;
     tab.set_user_agent(USER_AGENT, None, None)?;

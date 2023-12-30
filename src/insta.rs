@@ -10,7 +10,6 @@ use log::{debug, error, info, trace};
 pub use reel::Reel;
 use scraper::scraper;
 use std::{
-    os::unix::thread,
     sync::{
         mpsc::{self, Receiver},
         Arc, Mutex,
