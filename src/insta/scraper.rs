@@ -1,7 +1,9 @@
 use super::Reel;
 use crate::{browserwithtmpdir::BrowserWithTmpDir, config::USER_AGENT};
 use anyhow::Context;
-use headless_chrome::browser::tab::ResponseHandler;
+use headless_chrome::{
+    browser::tab::ResponseHandler, protocol::cdp::Page::CaptureScreenshotFormatOption::Png,
+};
 
 use log::{debug, error, info, trace, warn};
 use std::{
@@ -73,7 +75,8 @@ pub fn scraper(
         }
         if followers == 0 {
             error!("{id}: couldn't get followers count for {account}");
-            thread::park();
+            let data = tab.capture_screenshot(Png, None, None, true).unwrap();
+            std::fs::write(format!("screenshot-{account}"), data).unwrap();
             return Err(anyhow::anyhow!(
                 "couldn't get followers count for {account}"
             ));
