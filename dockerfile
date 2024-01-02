@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN apk add --no-cache chromium ca-certificates libc-dev
+RUN apk add --no-cache chromium ca-certificates libc-dev tzdata
 RUN cargo build --release
 
 ENV RUSTLOG=debug

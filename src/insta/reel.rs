@@ -1,6 +1,6 @@
 use std::{fmt, time::Duration};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 
@@ -17,7 +17,7 @@ pub struct Reel {
     #[serde(serialize_with = "serialize_custom_duration")]
     pub duration: Duration,
     #[serde(serialize_with = "serialize_custom_date")]
-    pub date: DateTime<Utc>,
+    pub date: DateTime<Local>,
     pub caption: String,
 }
 impl From<&Value> for Reel {
@@ -35,11 +35,10 @@ impl From<&Value> for Reel {
         let like = reel["like_count"].as_u64().unwrap() as usize;
         let comments = reel["comment_count"].as_u64().unwrap() as usize;
         let duration = reel["video_duration"].as_f64().unwrap();
-        let epoch_time_unknown = reel["device_timestamp"].as_u64().unwrap();
-        let epoch_time_s: usize = format!("{:0<.10}", epoch_time_unknown.to_string())
-            .parse()
-            .unwrap();
-        let date = DateTime::from_timestamp(epoch_time_s as i64, 0).unwrap_or_default();
+        let epoch_time_s = reel["taken_at"].as_i64().unwrap();
+        let date = DateTime::from_timestamp(epoch_time_s, 0)
+            .unwrap_or_default()
+            .into();
         let account = reel["user"]["username"].as_str().unwrap().to_string();
         Self {
             caption: caption.as_str().unwrap_or("no caption").into(),
@@ -78,7 +77,7 @@ impl Reel {
 }
 
 fn serialize_custom_date<S: Serializer>(
-    date: &DateTime<Utc>,
+    date: &DateTime<Local>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
     let formatted_date = date.format("%Y-%m-%d %H:%M:%S").to_string();
