@@ -62,8 +62,10 @@ pub fn scraper(
         tab.register_response_handling("reels", handler)?;
         tab.navigate_to(&format!("https://www.instagram.com/{account}/reels/"))
             .context("navigate_to")?;
+        tab.wait_until_navigated()?;
         let mut followers: usize = 0;
-        for _ in 0..20 {
+        const TRIES: usize = 30;
+        for i in 0..TRIES {
             if let Ok(el) = tab.find_element("a[href$='followers/']>span") {
                 let v = el
                     .get_attribute_value("title")?
@@ -71,6 +73,10 @@ pub fn scraper(
                     .replace(',', "")
                     .parse()?;
                 followers = v;
+            }
+            if TRIES / 2 == i {
+                tab.reload(true, None)?;
+                tab.wait_until_navigated()?;
             }
             thread::sleep(Duration::from_secs(1));
         }
