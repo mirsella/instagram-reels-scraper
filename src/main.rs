@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use chrono::TimeZone;
 use config::Config;
 use env_logger::Builder;
+use indexmap::IndexSet;
 use insta::run;
 use log::info;
 use std::{env, path::PathBuf};
@@ -27,10 +28,10 @@ fn main() -> Result<()> {
     );
     let slack = slack::SlackFileSender::new(&config.slack_token, &config.slack_channel);
 
-    let mut reels = Vec::with_capacity(100);
+    let mut reels = IndexSet::with_capacity(300);
     let (rx, runner) = run(&config).context("setting up insta")?;
     while let Ok(reel) = rx.recv() {
-        reels.push(reel);
+        reels.insert(reel);
     }
     reels.sort_unstable_by(|a, b| {
         a.ratio

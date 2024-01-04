@@ -1,15 +1,16 @@
-use std::{fmt, time::Duration};
+use std::{fmt, hash, time::Duration};
 
 use chrono::{DateTime, Local};
+use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Eq)]
 pub struct Reel {
     #[serde(skip_serializing)]
     pub id: String,
     pub link: String,
-    pub ratio: Option<f32>,
+    pub ratio: Option<OrderedFloat<f32>>,
     pub account: String,
     pub like: usize,
     pub comments: usize,
@@ -19,6 +20,18 @@ pub struct Reel {
     #[serde(serialize_with = "serialize_custom_date")]
     pub date: DateTime<Local>,
     pub caption: String,
+}
+
+impl PartialEq for Reel {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl hash::Hash for Reel {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
 }
 impl From<&Value> for Reel {
     fn from(value: &Value) -> Self {
@@ -72,7 +85,8 @@ impl fmt::Display for Reel {
 }
 impl Reel {
     pub fn set_ratio(&mut self, followers: usize) {
-        self.ratio = Some(self.views.unwrap_or_default() as f32 / followers as f32)
+        let ratio = self.views.unwrap_or_default() as f32 / followers as f32;
+        self.ratio = Some(OrderedFloat(ratio))
     }
 }
 
