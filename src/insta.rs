@@ -22,7 +22,6 @@ fn login(config: &Config) -> Result<()> {
     info!("login");
     let browser = BrowserWithTmpDir::new(config, false).context("new browser")?;
     let tab = browser.new_tab()?;
-    tab.enable_stealth_mode()?;
     tab.set_user_agent(USER_AGENT, None, None)?;
     tab.navigate_to("https://www.instagram.com/accounts/login/")?
         .wait_until_navigated()?;

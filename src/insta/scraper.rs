@@ -28,7 +28,6 @@ pub fn scraper(
         .map(ToString::to_string)
         .unwrap_or(format!("id:{:?}", t.id()));
     let tab = browser.new_tab()?;
-    tab.enable_stealth_mode()?;
     tab.set_user_agent(USER_AGENT, None, None)?;
     let (tx, rx) = mpsc::channel::<Reel>();
     let mut handler: ResponseHandler = {
