@@ -83,21 +83,22 @@ fn write_to_sheet<'a>(
     fields.iter().enumerate().for_each(|(i, f)| {
         sh.set_value(0, i as u32, *f);
     });
-    sh.set_col_width(0, spreadsheet_ods::Length::In(3f64));
-    sh.set_col_width(2, spreadsheet_ods::Length::In(1.5));
-    sh.set_col_width(7, spreadsheet_ods::Length::In(1.35));
     for (i, reel) in reels.into_iter().enumerate() {
         let i = i as u32 + 1;
         let link = &reel.link;
         let formula = format!("=HYPERLINK(\"{}\";\"{}\")", link, link);
+        sh.set_col_width(0, spreadsheet_ods::Length::In(3f64));
         sh.set_formula(i, 0, formula);
         sh.set_value(i, 1, *reel.ratio.unwrap_or_default());
+        sh.set_col_width(2, spreadsheet_ods::Length::In(1.5));
         sh.set_value(i, 2, &reel.account);
         sh.set_value(i, 3, reel.like as u32);
         sh.set_value(i, 4, reel.comments as u32);
         sh.set_value(i, 5, reel.views.unwrap_or_default() as u32);
         sh.set_value(i, 6, format!("{:?}", reel.duration));
+        sh.set_col_width(7, spreadsheet_ods::Length::In(1.35));
         sh.set_value(i, 7, &reel.date.format("%Y-%m-%d %H:%M:%S").to_string());
+        sh.set_col_width(8, spreadsheet_ods::Length::In(20));
         sh.set_value(i, 8, &reel.caption);
     }
     Ok(())
