@@ -98,7 +98,7 @@ fn write_to_sheet<'a>(
         sh.set_value(i, 6, format!("{:?}", reel.duration));
         sh.set_col_width(7, spreadsheet_ods::Length::In(1.35));
         sh.set_value(i, 7, &reel.date.format("%Y-%m-%d %H:%M:%S").to_string());
-        sh.set_col_width(8, spreadsheet_ods::Length::In(20));
+        sh.set_col_width(8, spreadsheet_ods::Length::In(15f64));
         sh.set_value(i, 8, &reel.caption);
     }
     Ok(())
