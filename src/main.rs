@@ -58,16 +58,16 @@ fn main() -> Result<()> {
     ));
 
     let mut wb = WorkBook::new_empty();
-    wb.push_sheet(Sheet::new("all"));
-    write_to_sheet(wb.sheet_mut(0), &reels)?;
     wb.push_sheet(Sheet::new(format!(
         "since {}",
         yesterday.format("%m-%d 00h00")
     )));
     write_to_sheet(
-        wb.sheet_mut(1),
+        wb.sheet_mut(0),
         reels.iter().filter(|r| r.date >= yesterday),
     )?;
+    wb.push_sheet(Sheet::new("all"));
+    write_to_sheet(wb.sheet_mut(1), &reels)?;
     spreadsheet_ods::write_ods(&mut wb, &path)?;
     slack.send_file(&path)?;
     Ok(())
