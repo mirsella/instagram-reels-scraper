@@ -35,13 +35,11 @@ mod tests {
             eprintln!("Error loading .env file: {}", e);
         }
 
-        let token = env::var("TELEGRAM_TOKEN").expect("TELEGRAM_TOKEN not set in env");
-        let id = env::var("TELEGRAM_ID").expect("TELEGRAM_ID not set in env");
+        let token = env::var("telegram_token").expect("TELEGRAM_TOKEN not set in env");
+        let id = env::var("telegram_chat_id").expect("TELEGRAM_ID not set in env");
 
         let tg = Telegram::new(token, id);
-        tg.send("you can ignore this. this is a test for telegram")
+        tg.send("you can ignore this. this is a test for the telegram crate.")
             .unwrap();
     }
-
-    // You can add more tests if needed
 }
