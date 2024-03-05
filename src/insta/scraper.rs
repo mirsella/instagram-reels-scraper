@@ -1,11 +1,10 @@
 use super::Reel;
 use crate::{browserwithtmpdir::BrowserWithTmpDir, config::USER_AGENT};
-use anyhow::Context;
-use headless_chrome::{
-    browser::tab::ResponseHandler, protocol::cdp::Page::CaptureScreenshotFormatOption::Png,
-};
+use anyhow::{bail, Context};
+use headless_chrome::browser::tab::ResponseHandler;
 
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace};
+use regex::Regex;
 use std::{
     sync::{
         mpsc::{self, Sender},
@@ -16,6 +15,21 @@ use std::{
 };
 
 const TIMEOUT: Duration = Duration::from_secs(20);
+
+enum Data {
+    Reel(Reel),
+    Followers(usize),
+}
+
+// fn wait_for_body<I, T: Fn() -> anyhow::Result<I>>(f: T) -> I {
+fn wait_for_body<I>(f: impl Fn() -> anyhow::Result<I>) -> I {
+    loop {
+        if let Ok(body) = f() {
+            return body;
+        };
+        thread::sleep(Duration::from_millis(100));
+    }
+}
 
 pub fn scraper(
     browser: BrowserWithTmpDir,
@@ -29,26 +43,40 @@ pub fn scraper(
         .unwrap_or(format!("id:{:?}", t.id()));
     let tab = browser.new_tab()?;
     tab.set_user_agent(USER_AGENT, None, None)?;
-    let (tx, rx) = mpsc::channel::<Reel>();
+    let re = Regex::new(r#""edge_followed_by":\{"count":(\d+)\}"#).unwrap();
+    let (tx, rx) = mpsc::channel::<Data>();
     let mut handler: ResponseHandler = {
         let id = id.clone();
         Box::new(move |res, fetch_body| {
-            if !res.response.url.contains("clips/user") {
+            if res.response.url.contains("api/v1/users/web_profile_info") {
+                let body = wait_for_body(fetch_body);
+                let count = re
+                    .captures(&body.body)
+                    .expect("a edge_followed_by in the response")
+                    .get(1)
+                    .unwrap();
+                tx.send(Data::Followers(count.as_str().parse().unwrap()))
+                    .unwrap();
                 return;
             }
-            trace!("{id}: got clips response");
-            thread::sleep(Duration::from_secs(4));
-            let body = match fetch_body() {
-                Ok(body) => body.body,
-                Err(e) => {
-                    warn!("{id}: couldn't get a body from response: {e}");
-                    return;
-                }
-            };
-            let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+            if !res.response.url.contains("graphql") {
+                return;
+            }
+            let body = wait_for_body(fetch_body).body;
+            if !body.contains("xdt_api__v1__clips__user__connection_v2") {
+                return;
+            }
+            let body: serde_json::Value = serde_json::from_str(&body).expect("valid json");
             trace!("{id}: got body, sending reels to main thread");
-            for reel in body["items"].as_array().unwrap() {
-                tx.send(reel.into()).unwrap();
+            let reels = body["data"]["xdt_api__v1__clips__user__connection_v2"]["edges"]
+                .as_array()
+                .expect("a array");
+            for (i, reel) in reels.iter().enumerate() {
+                if i >= 3 {
+                    break;
+                }
+                let reel = &reel["node"]["media"];
+                tx.send(Data::Reel(reel.into())).unwrap();
             }
         })
     };
@@ -62,34 +90,24 @@ pub fn scraper(
         tab.navigate_to(&format!("https://www.instagram.com/{account}/reels/"))
             .context("navigate_to")?;
         tab.wait_until_navigated()?;
-        let mut followers: usize = 0;
-        const TRIES: usize = 30;
-        for i in 0..TRIES {
-            if let Ok(el) = tab.find_element("a[href$='followers/']>span") {
-                let v = el
-                    .get_attribute_value("title")?
-                    .expect("expected title attribute")
-                    .replace(',', "")
-                    .parse()?;
-                followers = v;
+        info!("{id}: waiting {TIMEOUT:?} for responses");
+        let mut reels = vec![];
+        let mut followers = 0;
+        while let Ok(reel) = rx.recv_timeout(TIMEOUT) {
+            match reel {
+                Data::Reel(reel) => reels.push(reel),
+                Data::Followers(n) => {
+                    debug!("{id}: got followers count: {n}");
+                    followers = n
+                }
             }
-            if TRIES / 2 == i {
-                tab.reload(true, None)?;
-                tab.wait_until_navigated()?;
-            }
-            thread::sleep(Duration::from_secs(1));
         }
         if followers == 0 {
-            let data = tab.capture_screenshot(Png, None, None, true).unwrap();
-            std::fs::write(format!("screenshot-{account}.png"), data).unwrap();
-            info!("{id}: screenshot saved to screenshot-{account}.png");
-            return Err(anyhow::anyhow!(
-                "couldn't get followers count for {account}"
-            ));
+            bail!("{id}: couldn't get followers count");
         }
-        info!("{id}: waiting {TIMEOUT:?} for responses");
-        while let Ok(mut reel) = rx.recv_timeout(TIMEOUT) {
-            reel.set_ratio(followers);
+        for mut reel in reels {
+            reel.set_followers(followers);
+            reel.set_account(Some(account.clone()));
             main_tx.send(reel)?;
         }
         handler = tab.deregister_response_handling("reels")?.unwrap();

@@ -16,6 +16,7 @@ headless_chrome = { git = "https://github.com/mirsella/rust-headless-chrome" }
 indexmap = { version = "2.1.0", features = ["serde"] }
 log = "0.4.20"
 ordered-float = { version = "4.2.0", features = ["serde"] }
+regex = "1.10.3"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 spreadsheet-ods = "0.20.2"
