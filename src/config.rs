@@ -1,6 +1,5 @@
-use std::{collections::HashSet, path::PathBuf};
-
 use serde::Deserialize;
+use std::{collections::HashSet, path::PathBuf};
 
 fn _default_worker() -> usize {
     10

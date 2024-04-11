@@ -1,11 +1,9 @@
-use std::{ffi::OsStr, process::Command, time::Duration};
-
+use crate::config::Config;
 use anyhow::Context;
 use headless_chrome::{Browser, LaunchOptionsBuilder};
 use log::debug;
+use std::{ffi::OsStr, process::Command, time::Duration};
 use tempfile::TempDir;
-
-use crate::config::Config;
 
 pub struct BrowserWithTmpDir {
     browser: Browser,
