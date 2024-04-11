@@ -12,9 +12,9 @@ pub struct Reel {
     pub like: usize,
     pub comments: usize,
     pub views: Option<usize>,
-    #[serde(serialize_with = "serialize_custom_duration")]
+    // #[serde(serialize_with = "serialize_custom_duration")]
     pub duration: Duration,
-    #[serde(serialize_with = "serialize_custom_date")]
+    // #[serde(serialize_with = "serialize_custom_date")]
     pub date: DateTime<Local>,
     pub paid_partnership: bool,
     pub caption: String,
@@ -59,7 +59,7 @@ impl Reel {
     }
 }
 
-fn serialize_custom_date<S: Serializer>(
+fn _serialize_custom_date<S: Serializer>(
     date: &DateTime<Local>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
@@ -67,7 +67,7 @@ fn serialize_custom_date<S: Serializer>(
     serializer.serialize_str(&formatted_date)
 }
 
-fn serialize_custom_duration<S: Serializer>(
+fn _serialize_custom_duration<S: Serializer>(
     duration: &Duration,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
