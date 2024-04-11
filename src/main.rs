@@ -83,7 +83,7 @@ fn write_to_sheet<'a>(
     });
     for (i, reel) in reels.into_iter().enumerate() {
         let i = i as u32 + 1;
-        let link = &reel.link;
+        let link = &reel.url;
         let formula = format!("=HYPERLINK(\"{}\";\"{}\")", link, link);
         sh.set_col_width(0, spreadsheet_ods::Length::In(3f64));
         sh.set_formula(i, 0, formula);
