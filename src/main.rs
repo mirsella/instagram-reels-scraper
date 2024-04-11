@@ -4,6 +4,7 @@ mod insta;
 mod slack;
 mod telegram;
 
+use crate::telegram::Telegram;
 use anyhow::{bail, Context, Result};
 use chrono::NaiveTime;
 use config::Config;
@@ -13,8 +14,6 @@ use log::info;
 use spreadsheet_ods::{Sheet, WorkBook};
 use std::{env, path::PathBuf};
 use tempfile::tempdir;
-
-use crate::telegram::Telegram;
 
 fn main() -> Result<()> {
     Builder::new()
@@ -114,11 +113,11 @@ fn write_to_sheet<'a>(
         sh.set_col_width(2, spreadsheet_ods::Length::In(1.));
         sh.set_value(i, 3, reel.like as u32);
         sh.set_value(i, 4, reel.comments as u32);
-        sh.set_col_width(4, spreadsheet_ods::Length::In(0.4));
+        sh.set_col_width(4, spreadsheet_ods::Length::In(0.7));
         sh.set_value(i, 5, reel.views.unwrap_or_default() as u32);
         sh.set_value(i, 6, format!("{:?}", reel.duration));
         sh.set_col_width(6, spreadsheet_ods::Length::In(0.6));
-        sh.set_value(i, 7, reel.paid_partnership);
+        // sh.set_value(i, 7, reel.paid_partnership);
         sh.set_col_width(7, spreadsheet_ods::Length::In(0.5));
         sh.set_value(i, 8, &reel.date.format("%d-%m-%Y %H:%M:%S").to_string());
         sh.set_col_width(8, spreadsheet_ods::Length::In(1.35));
