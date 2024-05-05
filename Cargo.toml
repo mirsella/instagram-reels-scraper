@@ -23,3 +23,7 @@ spreadsheet-ods = "0.22.1"
 tempfile = "3.8.1"
 ureq = { version = "2.9.1", features = ["json"] }
 ureq_multipart = "1.1.1"
+
+# temporary until https://github.com/arturoc/color-rs/pull/2 is merged
+[patch.crates-io]
+color-rs = { git = "https://github.com/mirsella/color-rs.git" }
