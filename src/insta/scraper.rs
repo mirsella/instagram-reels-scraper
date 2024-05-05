@@ -1,6 +1,6 @@
 use super::Reel;
 use crate::{browserwithtmpdir::BrowserWithTmpDir, config::USER_AGENT};
-use anyhow::Context;
+use anyhow::{bail, Context};
 use chrono::NaiveTime;
 use headless_chrome::browser::tab::ResponseHandler;
 use log::{debug, info};
@@ -78,17 +78,24 @@ pub fn scraper(
             .expect("clicking");
 
         let mut count = 0;
-        while let Ok(mut reel) = rx.recv() {
+        loop {
+            let mut reel = match rx.recv_timeout(Duration::from_secs(60)) {
+                Ok(r) => r,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    bail!("{id}: timed out while waiting for reels");
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            };
             if reel.date < month_ago {
                 break;
             }
+            reel.set_ratio(followers);
+            count += 1;
+            main_tx.send(reel)?;
             tab.evaluate(
                 "document.querySelector(\"svg[aria-label='Next']\").parentElement.parentElement.parentElement.click()",
                 false,
             ).context("clicking on the next reel")?;
-            reel.set_ratio(followers);
-            count += 1;
-            main_tx.send(reel)?;
         }
         info!("{id}: got {count} reels on {account}");
         handler = tab.deregister_response_handling("reels")?.unwrap();
