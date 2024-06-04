@@ -62,7 +62,8 @@ fn main() -> Result<()> {
     let mut wb = WorkBook::new_empty();
 
     let mut sh_today = Sheet::new("today");
-    write_to_sheet(&mut sh_today, reels.iter().filter(|r| r.date >= today))?;
+    write_to_sheet(&mut sh_today, reels.iter().filter(|r| r.date >= today))
+        .context("writing reels to sheet")?;
     wb.push_sheet(sh_today);
 
     let mut sh_yesterday = Sheet::new("yesterday");
@@ -71,15 +72,16 @@ fn main() -> Result<()> {
         reels
             .iter()
             .filter(|r| r.date <= today && r.date >= yesterday),
-    )?;
+    )
+    .context("writing reels to sheet")?;
     wb.push_sheet(sh_yesterday);
 
     let mut sh_month = Sheet::new("last month");
-    write_to_sheet(&mut sh_month, &reels)?;
+    write_to_sheet(&mut sh_month, &reels).context("writing reels to sheet")?;
     wb.push_sheet(sh_month);
 
     spreadsheet_ods::write_ods(&mut wb, &path)?;
-    slack.send_file(&path)?;
+    slack.send_file(&path).context("sending file to slack")?;
     Ok(())
 }
 
