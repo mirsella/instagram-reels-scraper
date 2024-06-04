@@ -20,32 +20,41 @@ fn main() -> Result<()> {
         .parse_filters(&env::var("RUST_LOG").unwrap_or("instagram_reels_scraper=trace".into()))
         .init();
     dotenvy::dotenv().context("loading .env")?;
-    let config: Config = envy::from_env().context("failed to parse environment variables")?;
+    let mut config: Config = envy::from_env().context("failed to parse environment variables")?;
+    if cfg!(feature = "test") {
+        info!("using test slack channel");
+        config.slack_channel =
+            env::var("test_slack_channel").expect("test_slack_channel environment variable");
+    }
     let telegram = Telegram::new(&config.telegram_token, &config.telegram_chat_id);
-    info!(
-        "scraping `{}` reels from {} accounts: {:?}",
-        config.accounts_type,
-        config.accounts.len(),
-        config.accounts
-    );
     let slack = slack::SlackFileSender::new(&config.slack_token, &config.slack_channel);
 
     let mut reels = IndexSet::with_capacity(300);
 
-    // (0..10).for_each(|i| {
-    //     let reel = insta::Reel {
-    //         date: chrono::Local::now(),
-    //         caption: "test".repeat(10 * i),
-    //         ..Default::default()
-    //     };
-    //     reels.insert(reel.clone());
-    // });
-
-    let (rx, runner) = insta::run(&config).context("setting up insta")?;
-    while let Ok(reel) = rx.recv() {
-        reels.insert(reel);
+    if cfg!(feature = "fake") {
+        info!("using fake data");
+        (0..10).for_each(|i| {
+            let reel = insta::Reel {
+                date: chrono::Local::now(),
+                caption: "test".repeat(10 * i),
+                ..Default::default()
+            };
+            reels.insert(reel.clone());
+        });
+    } else {
+        info!(
+            "scraping `{}` reels from {} accounts: {:?}",
+            config.accounts_type,
+            config.accounts.len(),
+            config.accounts
+        );
+        let (rx, runner) = insta::run(&config).context("setting up insta")?;
+        while let Ok(reel) = rx.recv() {
+            reels.insert(reel);
+        }
+        runner.join().unwrap();
     }
-    runner.join().unwrap();
+
     reels.sort_unstable_by(|a, b| {
         a.ratio
             .unwrap_or_default()
