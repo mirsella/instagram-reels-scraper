@@ -1,14 +1,15 @@
-use std::path::Path;
-
 use anyhow::anyhow;
 use log::info;
 use serde_json::Value;
+use std::path::Path;
 use ureq_multipart::MultipartBuilder;
 
+#[deprecated = "The files.upload endpoint it deprecated"]
 pub struct SlackFileSender {
     token: String,
     channel: String,
 }
+#[allow(deprecated)]
 impl SlackFileSender {
     pub fn new(token: impl Into<String>, channel: impl Into<String>) -> Self {
         Self {
