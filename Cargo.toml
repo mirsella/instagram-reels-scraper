@@ -20,7 +20,7 @@ regex = "1.10.3"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 # 0.22 is broken https://github.com/thscharler/spreadsheet-ods/issues/54
-spreadsheet-ods = "=0.21.0"
+spreadsheet-ods = "0.20"
 tempfile = "3.8.1"
 ureq = { version = "2.9.1", features = ["json"] }
 ureq_multipart = "1.1.1"
