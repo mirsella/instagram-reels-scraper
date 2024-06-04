@@ -1,15 +1,14 @@
-use anyhow::anyhow;
+use anyhow::{bail, Context};
 use log::info;
+use serde_json::json;
 use serde_json::Value;
-use std::path::Path;
+use std::{fs, path::Path};
 use ureq_multipart::MultipartBuilder;
 
-#[deprecated = "The files.upload endpoint it deprecated"]
 pub struct SlackFileSender {
     token: String,
     channel: String,
 }
-#[allow(deprecated)]
 impl SlackFileSender {
     pub fn new(token: impl Into<String>, channel: impl Into<String>) -> Self {
         Self {
@@ -17,28 +16,51 @@ impl SlackFileSender {
             channel: channel.into(),
         }
     }
-    pub fn send_file(&self, path: &Path) -> anyhow::Result<Value> {
+    pub fn send_file(&self, path: &Path) -> anyhow::Result<()> {
+        let content = fs::read(path).context("reading file")?;
+
         let (content_type, data) = MultipartBuilder::new()
-            .add_file("file", path)?
-            .add_text(
-                "filetype",
-                path.extension()
-                    .ok_or(anyhow!("not extension for this filetype"))?
-                    .to_str()
-                    .unwrap(),
-            )?
-            .add_text("channels", &self.channel)?
+            .add_text("length", &content.len().to_string())?
+            .add_text("filename", path.to_str().unwrap())?
             .add_text("token", &self.token)?
             .finish()?;
-        info!("sending {path:?} to slack");
-        let response = ureq::post("https://slack.com/api/files.upload")
+        let json: Value = ureq::post("https://slack.com/api/files.getUploadURLExternal")
             .set("Content-Type", &content_type)
-            .send_bytes(&data)?;
-        let json: Value = response.into_json()?;
-        json.get("ok")
-            .and_then(Value::as_bool)
-            .ok_or_else(|| anyhow!("field `ok` not found in response: {json:#}"))?;
+            .send_bytes(&data)
+            .context("http request")?
+            .into_json()
+            .context("parsing response")?;
+        if !json["ok"].as_bool().unwrap_or_default() {
+            bail!("non-ok response on getUploadURLExternal: {json:?}");
+        }
+
+        let status = ureq::post(json["upload_url"].as_str().unwrap())
+            .send_bytes(&content)
+            .context("http request")?
+            .status();
+        if status != 200 {
+            bail!("non-200 response on upload_url: {status}");
+        }
+
+        let file_id = json["file_id"].as_str().unwrap();
+        let (content_type, data) = MultipartBuilder::new()
+            .add_text(
+                "files",
+                &json!([{"id": file_id, "title": path}]).to_string(),
+            )?
+            .add_text("token", &self.token)?
+            .add_text("channel_id", &self.channel)?
+            .finish()?;
+        let json: Value = ureq::post("https://slack.com/api/files.completeUploadExternal")
+            .set("Content-Type", &content_type)
+            .send_bytes(&data)
+            .context("http request")?
+            .into_json()
+            .context("parsing response")?;
+        if !json["ok"].as_bool().unwrap_or_default() {
+            bail!("non-ok response on completeUploadExternal: {json:?}");
+        }
         info!("sent {path:?} to slack");
-        Ok(json)
+        Ok(())
     }
 }
