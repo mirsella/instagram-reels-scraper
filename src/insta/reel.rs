@@ -4,7 +4,7 @@ use serde::{Serialize, Serializer};
 use serde_json::Value;
 use std::time::Duration;
 
-#[derive(Debug, Serialize, Eq, PartialEq, Hash)]
+#[derive(Debug, Serialize, Eq, PartialEq, Hash, Default, Clone)]
 pub struct Reel {
     pub url: String,
     pub ratio: Option<OrderedFloat<f32>>,

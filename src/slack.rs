@@ -1,4 +1,5 @@
 use anyhow::{bail, Context};
+use log::debug;
 use log::info;
 use serde_json::json;
 use serde_json::Value;
@@ -33,6 +34,7 @@ impl SlackFileSender {
         if !json["ok"].as_bool().unwrap_or_default() {
             bail!("non-ok response on getUploadURLExternal: {json:?}");
         }
+        debug!("slack getUploadURLExternal done");
 
         let status = ureq::post(json["upload_url"].as_str().unwrap())
             .send_bytes(&content)
@@ -41,6 +43,7 @@ impl SlackFileSender {
         if status != 200 {
             bail!("non-200 response on upload_url: {status}");
         }
+        debug!("slack upload_url done");
 
         let file_id = json["file_id"].as_str().unwrap();
         let (content_type, data) = MultipartBuilder::new()
@@ -60,6 +63,7 @@ impl SlackFileSender {
         if !json["ok"].as_bool().unwrap_or_default() {
             bail!("non-ok response on completeUploadExternal: {json:?}");
         }
+        debug!("slack completeUploadExternal done");
         info!("sent {path:?} to slack");
         Ok(())
     }

@@ -31,6 +31,16 @@ fn main() -> Result<()> {
     let slack = slack::SlackFileSender::new(&config.slack_token, &config.slack_channel);
 
     let mut reels = IndexSet::with_capacity(300);
+
+    // (0..10).for_each(|i| {
+    //     let reel = insta::Reel {
+    //         date: chrono::Local::now(),
+    //         caption: "test".repeat(10 * i),
+    //         ..Default::default()
+    //     };
+    //     reels.insert(reel.clone());
+    // });
+
     let (rx, runner) = insta::run(&config).context("setting up insta")?;
     while let Ok(reel) = rx.recv() {
         reels.insert(reel);
@@ -80,7 +90,10 @@ fn main() -> Result<()> {
     write_to_sheet(&mut sh_month, &reels).context("writing reels to sheet")?;
     wb.push_sheet(sh_month);
 
+    info!("writing spreadsheet to {}", path.display());
     spreadsheet_ods::write_ods(&mut wb, &path)?;
+
+    info!("sending file to slack");
     slack.send_file(&path).context("sending file to slack")?;
     Ok(())
 }
@@ -117,9 +130,9 @@ fn write_to_sheet<'a>(
         sh.set_value(i, 4, reel.comments as u32);
         sh.set_col_width(4, spreadsheet_ods::Length::In(0.7));
         sh.set_value(i, 5, reel.views.unwrap_or_default() as u32);
-        sh.set_value(i, 6, format!("{:?}", reel.duration));
+        sh.set_value(i, 6, reel.duration.as_secs().to_string());
         sh.set_col_width(6, spreadsheet_ods::Length::In(0.6));
-        // sh.set_value(i, 7, reel.paid_partnership);
+        sh.set_value(i, 7, reel.paid_partnership);
         sh.set_col_width(7, spreadsheet_ods::Length::In(0.5));
         sh.set_value(i, 8, &reel.date.format("%d-%m-%Y %H:%M:%S").to_string());
         sh.set_col_width(8, spreadsheet_ods::Length::In(1.35));
