@@ -102,8 +102,10 @@ fn main() -> Result<()> {
     info!("writing spreadsheet to {}", path.display());
     spreadsheet_ods::write_ods(&mut wb, &path)?;
 
-    info!("sending file to slack");
-    slack.send_file(&path).context("sending file to slack")?;
+    if !cfg!(feature = "dryrun") {
+        info!("sending file to slack");
+        slack.send_file(&path).context("sending file to slack")?;
+    }
     Ok(())
 }
 
