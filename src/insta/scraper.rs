@@ -46,6 +46,7 @@ pub fn scraper(
         tx.send(reel.into()).unwrap();
     });
 
+    #[cfg(not(feature = "all_time"))]
     let month_ago = chrono::Local::now()
         .with_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
         .unwrap()
@@ -86,6 +87,7 @@ pub fn scraper(
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
             };
+            #[cfg(not(feature = "all_time"))]
             if reel.date < month_ago {
                 break;
             }
