@@ -1,7 +1,6 @@
 use super::Reel;
 use crate::{browserwithtmpdir::BrowserWithTmpDir, config::USER_AGENT};
-use anyhow::{bail, Context};
-use chrono::NaiveTime;
+use anyhow::Context;
 use headless_chrome::browser::tab::ResponseHandler;
 use log::{debug, info};
 use std::{
@@ -48,7 +47,7 @@ pub fn scraper(
 
     #[cfg(not(feature = "all_time"))]
     let month_ago = chrono::Local::now()
-        .with_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+        .with_time(chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap())
         .unwrap()
         - chrono::Duration::days(30);
     loop {
@@ -83,12 +82,14 @@ pub fn scraper(
             let mut reel = match rx.recv_timeout(Duration::from_secs(60)) {
                 Ok(r) => r,
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    bail!("{id}: timed out while waiting for reels");
+                    info!("{id}: timed out while waiting for reels");
+                    break;
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
             };
             #[cfg(not(feature = "all_time"))]
             if reel.date < month_ago {
+                info!("{id}: stopping scraping from {account} because it's too old");
                 break;
             }
             reel.set_ratio(followers);
