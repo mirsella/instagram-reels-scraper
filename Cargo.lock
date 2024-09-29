@@ -1472,8 +1472,9 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "spreadsheet-ods"
-version = "0.22.3"
-source = "git+https://github.com/thscharler/spreadsheet-ods#ad4cb32073f7bfef0c7d3f311267ba68d43bcb13"
+version = "0.22.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f27defd9bc66776116aee57477fe91ca7eb7fbebac394f7991302445ed22c896"
 dependencies = [
  "base64",
  "chrono",

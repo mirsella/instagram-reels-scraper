@@ -94,7 +94,7 @@ pub fn run(config: &Config) -> Result<(Receiver<Reel>, JoinHandle<()>)> {
                 match handle.join() {
                     Ok(Err(e)) => {
                         error!("worker {name} thread error: {e:?}");
-                        if let Err(te) = telegram.send(&format!(
+                        if let Err(te) = telegram.send(format!(
                             "instagram-reels-scraper: worker {name} thread error: {e:?}"
                         )) {
                             error!("telegram error: {te:?}");
@@ -102,7 +102,7 @@ pub fn run(config: &Config) -> Result<(Receiver<Reel>, JoinHandle<()>)> {
                     }
                     Err(e) => {
                         error!("worker {name} thread panicked: {e:?}");
-                        if let Err(te) = telegram.send(&format!(
+                        if let Err(te) = telegram.send(format!(
                             "instagram-reels-scraper: worker {name} thread panicked: {e:?}"
                         )) {
                             error!("telegram error: {te:?}");
