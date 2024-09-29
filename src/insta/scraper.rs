@@ -72,7 +72,7 @@ pub fn scraper(
             .context("parsing followers count")?;
         debug!("{id}: got {followers} followers for {account}. starting scrolling");
 
-        tab.find_element("a[href^='/reel/']")
+        tab.find_element(&format!("a[href^='/{account}/reel/']"))
             .context("finding first reel")?
             .click()
             .expect("clicking");

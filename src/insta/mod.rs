@@ -6,7 +6,7 @@ use crate::{
     telegram::Telegram,
 };
 use anyhow::{Context, Result};
-use log::{debug, error, info, trace};
+use log::{debug, error, info};
 pub use reel::Reel;
 use scraper::scraper;
 use std::{
@@ -28,7 +28,7 @@ fn login(config: &Config) -> Result<()> {
     if let Ok(el) = tab.find_element_by_xpath(
         "//button[contains(text(), 'Decline') or contains(text(), 'Refuser')]",
     ) {
-        trace!("declining cookies");
+        debug!("declining cookies");
         el.click()?;
         tab.wait_until_navigated()?;
         sleep(Duration::from_secs(2));
@@ -40,7 +40,7 @@ fn login(config: &Config) -> Result<()> {
         tab.find_element("input[name=password]")?
             .type_into(&config.insta_pass)?;
         tab.find_element("button[type=submit]")?.click()?;
-        trace!("wait for redirect");
+        debug!("wait for redirect");
         while tab
             .get_url()
             .starts_with("https://www.instagram.com/accounts/login")
@@ -49,9 +49,9 @@ fn login(config: &Config) -> Result<()> {
         }
         tab.wait_until_navigated()?;
         thread::sleep(Duration::from_secs(2));
-        trace!("finish waiting for redirect");
+        debug!("finish waiting for redirect");
         if let Ok(el) = tab.find_element("button[type=button]") {
-            trace!("save info");
+            debug!("save info");
             el.click()?;
             tab.wait_until_navigated()?;
             thread::sleep(Duration::from_secs(2));
@@ -68,7 +68,7 @@ pub fn run(config: &Config) -> Result<(Receiver<Reel>, JoinHandle<()>)> {
     let urls = Arc::new(Mutex::new(Vec::from_iter(config.accounts.clone())));
     let (tx, rx) = mpsc::channel();
     let mut handles = Vec::with_capacity(config.worker);
-    trace!("starting {} workers", config.worker);
+    debug!("starting {} workers", config.worker);
     for i in 0..config.worker {
         let browser = BrowserWithTmpDir::new(config, true)?;
         let tx = tx.clone();
@@ -82,7 +82,7 @@ pub fn run(config: &Config) -> Result<(Receiver<Reel>, JoinHandle<()>)> {
     }
     let telegram = Telegram::new(&config.telegram_token, &config.telegram_chat_id);
     let handle = thread::spawn(move || {
-        trace!("waiting for {} workers to finish", handles.len());
+        debug!("waiting for {} workers to finish", handles.len());
         while !handles.is_empty() {
             if let Some(pos) = handles.iter().position(|h| h.is_finished()) {
                 let handle = handles.remove(pos);
