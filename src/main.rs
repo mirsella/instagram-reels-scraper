@@ -106,8 +106,7 @@ fn main() -> Result<()> {
         info!("sending file to slack");
         slack.send_file(&path).context("sending file to slack")?;
     } else {
-        info!("dryrun: not sending file to slack");
-        info!("dryrun: path: {}", path.display());
+        info!("dryrun: not sending file to slack. copying it to ./reels.ods");
         copy(path, "./reels.ods")?;
     }
     Ok(())
