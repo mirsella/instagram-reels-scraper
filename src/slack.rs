@@ -26,10 +26,11 @@ impl SlackFileSender {
             .add_text("token", &self.token)?
             .finish()?;
         let json: Value = ureq::post("https://slack.com/api/files.getUploadURLExternal")
-            .set("Content-Type", &content_type)
-            .send_bytes(&data)
+            .content_type(&content_type)
+            .send(&data)
             .context("http request")?
-            .into_json()
+            .body_mut()
+            .read_json()
             .context("parsing response")?;
         if !json["ok"].as_bool().unwrap_or_default() {
             bail!("non-ok response on getUploadURLExternal: {json:?}");
@@ -37,10 +38,10 @@ impl SlackFileSender {
         debug!("slack getUploadURLExternal done");
 
         let status = ureq::post(json["upload_url"].as_str().unwrap())
-            .send_bytes(&content)
+            .send(&content)
             .context("http request")?
             .status();
-        if status != 200 {
+        if status.as_u16() != 200 {
             bail!("non-200 response on upload_url: {status}");
         }
         debug!("slack upload_url done");
@@ -55,10 +56,11 @@ impl SlackFileSender {
             .add_text("channel_id", &self.channel)?
             .finish()?;
         let json: Value = ureq::post("https://slack.com/api/files.completeUploadExternal")
-            .set("Content-Type", &content_type)
-            .send_bytes(&data)
+            .content_type(&content_type)
+            .send(&data)
             .context("http request")?
-            .into_json()
+            .body_mut()
+            .read_json()
             .context("parsing response")?;
         if !json["ok"].as_bool().unwrap_or_default() {
             bail!("non-ok response on completeUploadExternal: {json:?}");

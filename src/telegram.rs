@@ -1,4 +1,4 @@
-use ureq::Response;
+use ureq::{http::Response, Body};
 
 pub struct Telegram {
     token: String,
@@ -12,14 +12,14 @@ impl Telegram {
             chat_id: chat_id.into(),
         }
     }
-    pub fn send(&self, msg: impl Into<String>) -> anyhow::Result<Response> {
+    pub fn send(&self, msg: impl Into<String>) -> anyhow::Result<Response<Body>> {
         let msg = msg.into();
         let url = format!("https://api.telegram.org/bot{}/sendMessage", self.token);
         let data = serde_json::json!({
             "chat_id": self.chat_id,
             "text": msg,
         });
-        Ok(ureq::post(&url).send_json(data)?)
+        Ok(ureq::post(&url).send_json(&data)?)
     }
 }
 
